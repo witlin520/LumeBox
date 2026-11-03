@@ -1,0 +1,70 @@
+{
+  "source": "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/vits-zh-aishell3.tar.bz2",
+  "archiveSha256": "c476bd76d7a25171014bdc1e3a38422f5af2045f43852d90dc4df67660482e20",
+  "parts": [
+    {
+      "name": "pack.00",
+      "bytes": 33554432,
+      "sha256": "2d48795890ea791f1caa122123b98f357afcc8add93be73bde5a4af7234fc303"
+    },
+    {
+      "name": "pack.01",
+      "bytes": 33554432,
+      "sha256": "3b251d61bee6080c13b470606f04a45877e4fa6b11db49c6990f8d61cb6b016c"
+    },
+    {
+      "name": "pack.02",
+      "bytes": 33554432,
+      "sha256": "5e4ce0dfdf935260ff56095b2aefe94b9a355e315720dfbd255abc7dbea59f12"
+    },
+    {
+      "name": "pack.03",
+      "bytes": 33554432,
+      "sha256": "f86753ba17cd40d1138310b9b3b0e8286f72af7bda22ac235838e62944516944"
+    },
+    {
+      "name": "pack.04",
+      "bytes": 12704879,
+      "sha256": "6026c5bf38bca8bf7a7cd69306f394798ab7f101ab955cc86a98cdc67f5ce58e"
+    }
+  ],
+  "files": [
+    {
+      "name": "date.fst",
+      "bytes": 59154,
+      "sha256": "eb8aa079ae3cb81d8f4404992f39d61a0cb990947512b5b8d1e54d1f6980e718"
+    },
+    {
+      "name": "vits-aishell3.onnx",
+      "bytes": 121383104,
+      "sha256": "c37544d41bd1686b14e9ba157dc072e23bbf2bab2cdea271383e993abd6fdcae"
+    },
+    {
+      "name": "lexicon.txt",
+      "bytes": 2042943,
+      "sha256": "ab2e61d357551e7b24ddd965d924aca784c20165ff58c150794e539c6b5e9e35"
+    },
+    {
+      "name": "number.fst",
+      "bytes": 64482,
+      "sha256": "743f402181fcfebf76cc2f0546b71fa26476e626fbe4e460fb7b4c3a7a8bd5bd"
+    },
+    {
+      "name": "new_heteronym.fst",
+      "bytes": 21974,
+      "sha256": "ca14b2127e27baa571664e4bb791e143e7425f56a6bc29db08d74f97e6aa4e29"
+    },
+    {
+      "name": "phone.fst",
+      "bytes": 88630,
+      "sha256": "1ac2b6fa56b1442320c4de7db08353bab8963a2b57f365eebcdd3a2d3562f8d7"
+    },
+    {
+      "name": "tokens.txt",
+      "bytes": 1671,
+      "sha256": "50b45a7b7de1752fd3c7b4755661c285f1547f59186eca2281089a81307ad953"
+    }
+  ],
+  "speakers": 174,
+  "sampleRate": 8000
+}

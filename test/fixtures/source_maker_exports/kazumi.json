@@ -1,0 +1,43 @@
+{
+  "name": "制源测试",
+  "version": "1.0.0",
+  "api": "1",
+  "baseURL": "https://fixture.invalid/list",
+  "useNativePlayer": true,
+  "usePost": false,
+  "useLegacyParser": false,
+  "searchList": "//a[contains(@href,'/item/')]",
+  "searchName": "@title | .//img/@alt | .//text()[normalize-space()]",
+  "searchResult": ".",
+  "chapterRoads": "/html/body",
+  "chapterResult": "//a[contains(@href,'/chapter/')]",
+  "searchMode": "api",
+  "chapterMode": "api",
+  "searchApiConfig": {
+    "request": {
+      "url": "https://fixture.invalid/api",
+      "method": "GET",
+      "query": {
+        "ac": "detail",
+        "wd": "@keyword",
+        "pg": "@page"
+      }
+    },
+    "listPath": "$.list[*]",
+    "namePath": "$.vod_name",
+    "sourcePath": "$.vod_id"
+  },
+  "chapterApiConfig": {
+    "request": {
+      "url": "https://fixture.invalid/api",
+      "method": "GET",
+      "query": {
+        "ac": "detail",
+        "ids": "@source"
+      }
+    },
+    "format": "delimited",
+    "roadNamesPath": "$.list[0].vod_play_from",
+    "roadEpisodesPath": "$.list[0].vod_play_url"
+  }
+}

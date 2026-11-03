@@ -1,0 +1,1589 @@
+{
+  "date": "2026-10-26",
+  "scope": "All 139 repository source declarations; ordinary movie/audio icons and first three list covers sampled. No adult-site feed or media requests.",
+  "summary": {
+    "sources": 139,
+    "adultRated": 119,
+    "ordinarySourcesProbed": 14,
+    "iconsVerified": 12,
+    "unclassifiedNonMovieAudio": 6
+  },
+  "changes": [
+    "Fixed red 18+ badge independent of theme/icon packs",
+    "Display rating badge in video source picker",
+    "Classify p5mh_comic and fxcomic_comic as 18+",
+    "Pin 12 verified ordinary-site icons",
+    "Resolve favicon paths against redirected document URL and HTML base; decode entities",
+    "Use actual homepage cards for category-less Flixflop list",
+    "Support audiobook lazy/srcset covers and skip loading placeholders",
+    "Recognize exact classified source names when imported source IDs differ; do not use substring guesses"
+  ],
+  "classificationReviewPending": [
+    "kmh001_comic",
+    "sansi_comic",
+    "mycomic_comic",
+    "nnmh_comic",
+    "z8pt_comic",
+    "asmrhoney_video"
+  ],
+  "sourceInventory": [
+    {
+      "id": "manhua127_comic",
+      "name": "127漫画",
+      "path": "comic/127漫画.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "pica177_comic",
+      "name": "177漫畫",
+      "path": "comic/177漫畫.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "mmcg18_comic",
+      "name": "18H漫画",
+      "path": "comic/18H漫画.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "jm18_comic",
+      "name": "18禁漫",
+      "path": "comic/18禁漫.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "hentai3_comic",
+      "name": "3Hentai",
+      "path": "comic/3Hentai.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "manhua90_comic",
+      "name": "90漫画",
+      "path": "comic/90漫画.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "manhua96_comic",
+      "name": "96漫画",
+      "path": "comic/96漫画.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "gmh_comic",
+      "name": "G社漫画",
+      "path": "comic/G社漫画.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "hman8_comic",
+      "name": "H漫黄漫天堂",
+      "path": "comic/H漫黄漫天堂.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "jcomic_comic",
+      "name": "JComic",
+      "path": "comic/JComic漫画.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "kmh001_comic",
+      "name": "K漫画",
+      "path": "comic/K漫画.js",
+      "rating": "unknown",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "manga18_comic",
+      "name": "Manga18",
+      "path": "comic/Manga18.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "nhentai_comic",
+      "name": "nhentai",
+      "path": "comic/nhentai.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "p5mh_comic",
+      "name": "P5韩漫",
+      "path": "comic/P5韩漫.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "xman6_comic",
+      "name": "X漫",
+      "path": "comic/X漫.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "yidan17_comic",
+      "name": "一耽女孩",
+      "path": "comic/一耽女孩.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "qqhanman_comic",
+      "name": "七七韩漫",
+      "path": "comic/七七韩漫.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "sansi_comic",
+      "name": "三四漫画",
+      "path": "comic/三四漫画.js",
+      "rating": "unknown",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "litu100_comic",
+      "name": "丽图漫画",
+      "path": "comic/丽图漫画.js",
+      "rating": "18+",
+      "iconDeclared": true,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "mh18_comic",
+      "name": "十八漫画",
+      "path": "comic/十八漫画.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "hanman18_comic",
+      "name": "十八韩漫",
+      "path": "comic/十八韩漫.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "boysyo_comic",
+      "name": "啵乐",
+      "path": "comic/啵乐.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "drmh5_comic",
+      "name": "大人漫画",
+      "path": "comic/大人漫画.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "yaojinghanman_comic",
+      "name": "妖精漫画",
+      "path": "comic/妖精漫画.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "bakamh_comic",
+      "name": "巴卡漫画",
+      "path": "comic/巴卡漫画.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "kxmanhua1_comic",
+      "name": "开心看漫画",
+      "path": "comic/开心看漫画.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "ikanmanhua_comic",
+      "name": "愛看漫畫",
+      "path": "comic/愛看漫畫.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "mycomic_comic",
+      "name": "我的漫画",
+      "path": "comic/我的漫画.js",
+      "rating": "unknown",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "nnmh_comic",
+      "name": "楠楠漫画",
+      "path": "comic/楠楠漫画.js",
+      "rating": "unknown",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "mkzhan_comic",
+      "name": "漫客栈",
+      "path": "comic/漫客栈.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "fxcomic_comic",
+      "name": "漫小肆",
+      "path": "comic/漫小肆.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "manwa_comic",
+      "name": "漫蛙",
+      "path": "comic/漫蛙.js",
+      "rating": "18+",
+      "iconDeclared": true,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "mxgmh_comic",
+      "name": "漫香阁",
+      "path": "comic/漫香阁.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "relamanhua_comic",
+      "name": "熱辣漫畫",
+      "path": "comic/熱辣漫畫.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "ihanman_comic",
+      "name": "爱韩漫",
+      "path": "comic/爱韩漫.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "jmdw8_comic",
+      "name": "禁漫大王",
+      "path": "comic/禁漫大王.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "jmcomic_comic",
+      "name": "禁漫天堂",
+      "path": "comic/禁漫天堂.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "jmd91_comic",
+      "name": "禁漫岛",
+      "path": "comic/禁漫岛.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "wnacg_comic",
+      "name": "紳士漫畫",
+      "path": "comic/紳士漫畫.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "rmtt2_comic",
+      "name": "肉漫天堂",
+      "path": "comic/肉漫天堂.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "rouman5_comic",
+      "name": "肉漫屋",
+      "path": "comic/肉漫屋.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "fuzhaiboylove_comic",
+      "name": "腐宅BoyLove",
+      "path": "comic/腐宅BoyLove.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "seyoumanhua_comic",
+      "name": "色友漫画",
+      "path": "comic/色友漫画.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "smtt6_comic",
+      "name": "色漫天堂",
+      "path": "comic/色漫天堂.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "cartoon18_comic",
+      "name": "色漫網",
+      "path": "comic/色漫網.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "antbyw_comic",
+      "name": "蚂蚁搬运",
+      "path": "comic/蚂蚁搬运.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "nnhanman_comic",
+      "name": "鸟鸟韩漫",
+      "path": "comic/鸟鸟韩漫.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "long91_comic",
+      "name": "龙禁漫",
+      "path": "comic/龙禁漫.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "z8pt_comic",
+      "name": "Z8PT图库",
+      "path": "photo/Z8PT图库.js",
+      "rating": "unknown",
+      "iconDeclared": true,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "xchina_photo",
+      "name": "小黄书套图",
+      "path": "photo/小黄书套图.js",
+      "rating": "18+",
+      "iconDeclared": true,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "xchina_amateur",
+      "name": "小黄书自拍",
+      "path": "photo/小黄书自拍.js",
+      "rating": "18+",
+      "iconDeclared": true,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "a123tv",
+      "name": "A123TV",
+      "path": "movie/A123TV.js",
+      "rating": "unknown",
+      "iconDeclared": true,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "luttt_video",
+      "name": "北觅影视",
+      "path": "movie/北觅影视.js",
+      "rating": "unknown",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "huavod",
+      "name": "华视影院",
+      "path": "movie/华视影院.js",
+      "rating": "unknown",
+      "iconDeclared": true,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "ysxq-boju",
+      "name": "播剧网（ysxq）",
+      "path": "movie/播剧网.js",
+      "rating": "unknown",
+      "iconDeclared": true,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "olehdtv",
+      "name": "欧乐影院",
+      "path": "movie/欧乐影院.js",
+      "rating": "unknown",
+      "iconDeclared": true,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "gztv5_video",
+      "name": "瓜子影视",
+      "path": "movie/瓜子影视.js",
+      "rating": "unknown",
+      "iconDeclared": true,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "duanju2",
+      "name": "短剧网",
+      "path": "movie/短剧网.js",
+      "rating": "unknown",
+      "iconDeclared": true,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "jpyy2_video",
+      "name": "金牌影院",
+      "path": "movie/金牌影院.js",
+      "rating": "unknown",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "flixflop",
+      "name": "飞流视频",
+      "path": "movie/飞流视频.js",
+      "rating": "unknown",
+      "iconDeclared": true,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "fdzys",
+      "name": "饭搭子影视",
+      "path": "movie/饭搭子影视.js",
+      "rating": "unknown",
+      "iconDeclared": true,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "v1024_video",
+      "name": "1024Videos",
+      "path": "video/1024Videos.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "av18_video",
+      "name": "18AV",
+      "path": "video/18AV.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "lu320_video",
+      "name": "320lu小视频",
+      "path": "video/320lu小视频.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "tmrj37_video",
+      "name": "37tmrj",
+      "path": "video/37tmrj.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "xfdxv_video",
+      "name": "41看片 18+",
+      "path": "video/41看片.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "s618208_video",
+      "name": "618208",
+      "path": "video/618208.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "p85_video",
+      "name": "85PO",
+      "path": "video/85PO.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "x8x8_video",
+      "name": "8x8x",
+      "path": "video/8x8x.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "porn91_video",
+      "name": "91Porn",
+      "path": "video/91Porn视频.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "jiuxse_video",
+      "name": "9sex 18+",
+      "path": "video/9sex.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "aboutporno_video",
+      "name": "About Porno",
+      "path": "video/AboutPorno.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "artofzoo_video",
+      "name": "ArtOfZoo",
+      "path": "video/ArtOfZoo.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "asm_video",
+      "name": "Asian Street Meat",
+      "path": "video/AsianStreetMeat.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "cf2_video",
+      "name": "Butterfly 18+",
+      "path": "video/Butterfly.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "cf3_video",
+      "name": "Butterfly 2 18+",
+      "path": "video/Butterfly2.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "chaturbetter_video",
+      "name": "Chaturbetter",
+      "path": "video/Chaturbetter.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "fakehub_video",
+      "name": "FakeHub",
+      "path": "video/FakeHub.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "familyporn_video",
+      "name": "Familyporn",
+      "path": "video/Familyporn.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "hentai2w",
+      "name": "Hentai2W",
+      "path": "video/Hentai2W.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "horrorporn_video",
+      "name": "HorrorPorn",
+      "path": "video/HorrorPorn.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "h4dh3_video",
+      "name": "hxc 18+",
+      "path": "video/hxc.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "hanime1_video",
+      "name": "H动漫一号",
+      "path": "video/H动漫一号.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "hanime_video",
+      "name": "H動漫網",
+      "path": "video/H動漫網.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "iwara_video",
+      "name": "Iwara",
+      "path": "video/Iwara视频.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "kaotic_video",
+      "name": "Kaotic",
+      "path": "video/Kaotic.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "lxxlxx_video",
+      "name": "LXXLXX",
+      "path": "video/LXXLXX.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "maturenl_video",
+      "name": "Mature.nl",
+      "path": "video/MatureNL.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "maturetube_video",
+      "name": "MatureTube",
+      "path": "video/MatureTube.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "mfc_video",
+      "name": "MyFreeCams",
+      "path": "video/MyFreeCams.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "pornhub_video",
+      "name": "Pornhub",
+      "path": "video/Pornhub.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "porntrex_video",
+      "name": "PornTrex",
+      "path": "video/PornTrex.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "ptt2_video",
+      "name": "PTT线上看",
+      "path": "video/PTT线上看.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "redtube_video",
+      "name": "RedTube",
+      "path": "video/RedTube.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "spankbang_video",
+      "name": "SpankBang 18+",
+      "path": "video/SpankBang.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "thepornjoy_video",
+      "name": "ThePornJoy 18+",
+      "path": "video/ThePornJoy.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "twixive_video",
+      "name": "TwiXive",
+      "path": "video/TwiXive推特.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "txxx_video",
+      "name": "TXXX",
+      "path": "video/TXXX.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "uncams_video",
+      "name": "UN Cams",
+      "path": "video/UNCams.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "voyeurhit_video",
+      "name": "VoyeurHit",
+      "path": "video/VoyeurHit.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "xhamster_video",
+      "name": "xHamster",
+      "path": "video/xHamster.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "xhamsterlive_video",
+      "name": "xHamsterLive",
+      "path": "video/xHamsterLive.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "xnxx_video",
+      "name": "XNXX",
+      "path": "video/XNXX.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "xtube_video",
+      "name": "XTUBE",
+      "path": "video/XTUBE.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "xvideos_video",
+      "name": "XVideos",
+      "path": "video/XVideos.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "youjizz_video",
+      "name": "YouJizz",
+      "path": "video/YouJizz.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "zoosexfarm_video",
+      "name": "Zoo Sex Farm",
+      "path": "video/ZooSexFarm.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "jipian3_video",
+      "name": "三级片",
+      "path": "video/三级片.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "jj38_video",
+      "name": "久久热",
+      "path": "video/99jj38.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "jiuse91_video",
+      "name": "九色91Porny",
+      "path": "video/九色91Porny.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "yunlaopo_video",
+      "name": "云老婆",
+      "path": "video/云老婆.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "yasetube_video",
+      "name": "亚色影库",
+      "path": "video/亚色影库.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "papalah_video",
+      "name": "啪啪啦",
+      "path": "video/啪啪啦.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "hipeng_video",
+      "name": "嗨碰",
+      "path": "video/嗨碰.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "hu4_video",
+      "name": "四虎",
+      "path": "video/四虎.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "dage_video",
+      "name": "大哥视频",
+      "path": "video/大哥视频.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "haoqi7_video",
+      "name": "好妻网 18+",
+      "path": "video/好妻网.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "hstv_video",
+      "name": "好色TV",
+      "path": "video/好色TV.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "fcw_video",
+      "name": "废柴视频",
+      "path": "video/Fcw.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "yue5xi5_video",
+      "name": "快猫 18+",
+      "path": "video/快猫.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "mwx43zd_video",
+      "name": "快猫镜像站 18+",
+      "path": "video/快猫镜像站.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "xanimu_video",
+      "name": "成人动漫",
+      "path": "video/成人动漫.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "yuese_video",
+      "name": "月色视频 18+",
+      "path": "video/月色视频.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "sex8_video",
+      "name": "杏吧",
+      "path": "video/杏吧.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "chaturbate_video",
+      "name": "查特直播",
+      "path": "video/查特直播.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "tangtoutiao_video",
+      "name": "汤头条 18+",
+      "path": "video/汤头条.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "haijiao_video",
+      "name": "海角 18+",
+      "path": "video/海角.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "aqd_video",
+      "name": "爱情岛",
+      "path": "video/爱情岛.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "aido8_video",
+      "name": "爱豆 18+",
+      "path": "video/爱豆.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "asmrhoney_video",
+      "name": "蜜糖助眠",
+      "path": "video/蜜糖助眠.js",
+      "rating": "unknown",
+      "iconDeclared": false,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "niacg_video",
+      "name": "逆次元ACG",
+      "path": "video/逆次元ACG.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "madou_club_video",
+      "name": "麻豆社",
+      "path": "video/麻豆社.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "huangguo_video",
+      "name": "黄果剧场",
+      "path": "video/黄果剧场.js",
+      "rating": "18+",
+      "iconDeclared": true,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "ting13_audiobook",
+      "name": "13听书网",
+      "path": "audiobook/13听书网.js",
+      "rating": "unknown",
+      "iconDeclared": true,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "ting8_audiobook",
+      "name": "听书吧",
+      "path": "audiobook/听书吧.js",
+      "rating": "unknown",
+      "iconDeclared": true,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "xnovel_audiobook",
+      "name": "夜读小说听书",
+      "path": "audiobook/夜读小说听书.js",
+      "rating": "18+",
+      "iconDeclared": false,
+      "coverHeadersDeclared": false
+    },
+    {
+      "id": "xchina_audiobook",
+      "name": "小黄书听书",
+      "path": "audiobook/小黄书听书.js",
+      "rating": "18+",
+      "iconDeclared": true,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "yuetingba_audiobook",
+      "name": "悦听吧",
+      "path": "audiobook/悦听吧.js",
+      "rating": "unknown",
+      "iconDeclared": true,
+      "coverHeadersDeclared": true
+    },
+    {
+      "id": "qilin70_audiobook",
+      "name": "麒麟听书",
+      "path": "audiobook/麒麟听书.js",
+      "rating": "unknown",
+      "iconDeclared": true,
+      "coverHeadersDeclared": true
+    }
+  ],
+  "ordinarySiteIcons": [
+    {
+      "id": "a123tv",
+      "path": "movie/A123TV.js",
+      "site": "https://a123tv.com",
+      "iconStatus": "verified-raster",
+      "icon": "https://a123tv.com/s2/icon/favicon-180.png",
+      "iconAttempts": [],
+      "homepageCoverDeclared": true,
+      "itemCovers": "not-live-tested"
+    },
+    {
+      "id": "luttt_video",
+      "path": "movie/北觅影视.js",
+      "site": "https://v.luttt.com",
+      "iconStatus": "unverified",
+      "iconAttempts": [
+        {
+          "url": "https://cos.luttt.com/user_files/1/publish/words/31529237_1765120698.png",
+          "status": "HTTPError"
+        },
+        {
+          "url": "https://cos.luttt.com/user_files/1/publish/words/61706294_1765124190.png",
+          "status": "HTTPError"
+        },
+        {
+          "url": "https://v.luttt.com/favicon.ico",
+          "status": "HTTPError"
+        },
+        {
+          "url": "https://v.luttt.com/favicon.png",
+          "status": "HTTPError"
+        }
+      ],
+      "homepageCoverDeclared": false,
+      "itemCovers": "not-live-tested"
+    },
+    {
+      "id": "huavod",
+      "path": "movie/华视影院.js",
+      "site": "https://huavod.com",
+      "iconStatus": "verified-raster",
+      "icon": "https://huavod.com/static/favicon/favicon-96x96.png",
+      "iconAttempts": [],
+      "homepageCoverDeclared": true,
+      "itemCovers": "not-live-tested"
+    },
+    {
+      "id": "ysxq-boju",
+      "path": "movie/播剧网.js",
+      "site": "https://ysxq.cc",
+      "iconStatus": "verified-raster",
+      "icon": "https://ysxq.cc/template/dsn2/static/img/ico.png",
+      "iconAttempts": [],
+      "homepageCoverDeclared": false,
+      "itemCovers": "not-live-tested"
+    },
+    {
+      "id": "olehdtv",
+      "path": "movie/欧乐影院.js",
+      "site": "https://www.olehdtv.com",
+      "iconStatus": "verified-raster",
+      "icon": "https://www.olehdtv.com/favicon.ico",
+      "iconAttempts": [
+        {
+          "url": "https://static.olelive.com/upload/site/20201117-1/902e3851b6695ac661422b45483d694a.png",
+          "status": "not-raster"
+        },
+        {
+          "url": "https://static.olelive.com/upload/site/20201117-1/08aee3974ca3d001ceab066233599789.png",
+          "status": "not-raster"
+        }
+      ],
+      "homepageCoverDeclared": false,
+      "itemCovers": "not-live-tested"
+    },
+    {
+      "id": "gztv5_video",
+      "path": "movie/瓜子影视.js",
+      "site": "https://gztv5.com",
+      "iconStatus": "verified-raster",
+      "icon": "https://gztv5.com/favicon.ico",
+      "iconAttempts": [],
+      "homepageCoverDeclared": true,
+      "itemCovers": "not-live-tested"
+    },
+    {
+      "id": "duanju2",
+      "path": "movie/短剧网.js",
+      "site": "https://www.duanju2.com",
+      "iconStatus": "verified-raster",
+      "icon": "https://www.duanju2.com/template/djw/ripro_static/favicon.ico",
+      "iconAttempts": [],
+      "homepageCoverDeclared": false,
+      "itemCovers": "not-live-tested"
+    },
+    {
+      "id": "jpyy2_video",
+      "path": "movie/金牌影院.js",
+      "site": "https://m.vv3nwjk.com",
+      "iconStatus": "homepage-unreachable",
+      "error": "HTTPError",
+      "itemCovers": "not-live-tested"
+    },
+    {
+      "id": "flixflop",
+      "path": "movie/飞流视频.js",
+      "site": "https://www.flixflop.com",
+      "iconStatus": "verified-raster",
+      "icon": "https://www.flixflop.com/favicon.png",
+      "iconAttempts": [],
+      "homepageCoverDeclared": false,
+      "itemCovers": "not-live-tested"
+    },
+    {
+      "id": "fdzys",
+      "path": "movie/饭搭子影视.js",
+      "site": "https://fdzys.com",
+      "iconStatus": "verified-raster",
+      "icon": "https://fdzys.com/template/mizhiady/statics/images/favicon.ico",
+      "iconAttempts": [],
+      "homepageCoverDeclared": true,
+      "itemCovers": "not-live-tested"
+    },
+    {
+      "id": "ting13_audiobook",
+      "path": "audiobook/13听书网.js",
+      "site": "https://www.ting13.cc",
+      "iconStatus": "verified-raster",
+      "icon": "https://www.ting13.cc/favicon.ico",
+      "iconAttempts": [],
+      "homepageCoverDeclared": false,
+      "itemCovers": "not-live-tested"
+    },
+    {
+      "id": "ting8_audiobook",
+      "path": "audiobook/听书吧.js",
+      "site": "https://www.ting8.cc",
+      "iconStatus": "verified-raster",
+      "icon": "https://www.ting8.cc/templets/tingshu/images/favicon_tx.ico",
+      "iconAttempts": [
+        {
+          "url": "https://www.ting8.cc/favicon.ico",
+          "status": "not-raster"
+        }
+      ],
+      "homepageCoverDeclared": false,
+      "itemCovers": "not-live-tested"
+    },
+    {
+      "id": "yuetingba_audiobook",
+      "path": "audiobook/悦听吧.js",
+      "site": "http://www.yuetingba.cn",
+      "iconStatus": "verified-raster",
+      "icon": "http://www.yuetingba.cn/favicon.ico",
+      "iconAttempts": [],
+      "homepageCoverDeclared": false,
+      "itemCovers": "not-live-tested"
+    },
+    {
+      "id": "qilin70_audiobook",
+      "path": "audiobook/麒麟听书.js",
+      "site": "https://www.70ts.com",
+      "iconStatus": "verified-raster",
+      "icon": "https://www.70ts.com/favicon.ico",
+      "iconAttempts": [],
+      "homepageCoverDeclared": false,
+      "itemCovers": "not-live-tested"
+    }
+  ],
+  "ordinaryCoverSamples": [
+    {
+      "id": "a123tv",
+      "path": "movie/A123TV.js",
+      "covers": [
+        {
+          "status": 200,
+          "image": true,
+          "host": "i1.a123tv.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "i1.a123tv.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "i1.a123tv.com"
+        }
+      ],
+      "items": 36,
+      "withCover": 36,
+      "status": "checked"
+    },
+    {
+      "id": "luttt_video",
+      "path": "movie/北觅影视.js",
+      "covers": [
+        {
+          "status": 200,
+          "image": true,
+          "host": "img.dytt-tupian.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "img.dytt-tupian.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "img.dytt-tupian.com"
+        }
+      ],
+      "items": 36,
+      "withCover": 36,
+      "status": "checked"
+    },
+    {
+      "id": "huavod",
+      "path": "movie/华视影院.js",
+      "covers": [],
+      "status": "failed",
+      "error": "Error: NEED_WEBVIEW_VERIFY：华视影院触发了 Cloudflare 人机校验（HTTP 403），请在源设置里走网页视图完成校验，或给本源配置代理"
+    },
+    {
+      "id": "ysxq-boju",
+      "path": "movie/播剧网.js",
+      "covers": [
+        {
+          "status": 200,
+          "image": true,
+          "host": "vod.xiguazyimg.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "vod.xiguazyimg.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "vod.xiguazyimg.com"
+        }
+      ],
+      "items": 20,
+      "withCover": 20,
+      "status": "checked"
+    },
+    {
+      "id": "olehdtv",
+      "path": "movie/欧乐影院.js",
+      "covers": [],
+      "status": "failed",
+      "error": "Error: NEED_WEBVIEW_VERIFY：欧乐影院触发了 Cloudflare 人机校验（HTTP 403），请在源设置里走网页视图完成校验，或给本源配置代理"
+    },
+    {
+      "id": "gztv5_video",
+      "path": "movie/瓜子影视.js",
+      "covers": [
+        {
+          "status": 200,
+          "image": true,
+          "host": "img2.ms39pn.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "img2.ms39pn.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "img2.ms39pn.com"
+        }
+      ],
+      "items": 30,
+      "withCover": 30,
+      "status": "checked"
+    },
+    {
+      "id": "duanju2",
+      "path": "movie/短剧网.js",
+      "covers": [
+        {
+          "status": 200,
+          "image": true,
+          "host": "pic.youkupic.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "pic.youkupic.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "pic.youkupic.com"
+        }
+      ],
+      "items": 12,
+      "withCover": 12,
+      "status": "checked"
+    },
+    {
+      "id": "jpyy2_video",
+      "path": "movie/金牌影院.js",
+      "covers": [],
+      "status": "failed",
+      "error": "Error: WAF_RECAPTCHA_V3：金牌影院（jpyy2.com / vv3nwjk.com）启用了 reCAPTCHA v3 WAF（HTTP 521 https://jpyy2.com/api/mw-movie/anonymous/vid"
+    },
+    {
+      "id": "flixflop",
+      "path": "movie/飞流视频.js",
+      "covers": [
+        {
+          "status": 200,
+          "image": true,
+          "host": "img.dytt-tupian.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "img.dytt-tupian.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "img.dytt-tupian.com"
+        }
+      ],
+      "items": 44,
+      "withCover": 44,
+      "status": "checked"
+    },
+    {
+      "id": "fdzys",
+      "path": "movie/饭搭子影视.js",
+      "covers": [
+        {
+          "status": 200,
+          "image": true,
+          "host": "fdzys.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "pic.ry-pic.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "vcover-vt-pic.puui.qpic.cn"
+        }
+      ],
+      "items": 24,
+      "withCover": 24,
+      "status": "checked"
+    },
+    {
+      "id": "ting13_audiobook",
+      "path": "audiobook/13听书网.js",
+      "covers": [],
+      "status": "failed",
+      "error": "Error: NEED_WEBVIEW_VERIFY：13听书网 需要网页验证（HTTP 403）"
+    },
+    {
+      "id": "ting8_audiobook",
+      "path": "audiobook/听书吧.js",
+      "covers": [
+        {
+          "status": 200,
+          "image": true,
+          "host": "www.ting8.cc"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "www.ting8.cc"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "www.ting8.cc"
+        }
+      ],
+      "items": 16,
+      "withCover": 16,
+      "status": "checked"
+    },
+    {
+      "id": "yuetingba_audiobook",
+      "path": "audiobook/悦听吧.js",
+      "covers": [
+        {
+          "status": 200,
+          "image": true,
+          "host": "www.yuetingba.cn"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "www.yuetingba.cn"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "www.yuetingba.cn"
+        }
+      ],
+      "items": 19,
+      "withCover": 10,
+      "status": "checked"
+    },
+    {
+      "id": "qilin70_audiobook",
+      "path": "audiobook/麒麟听书.js",
+      "covers": [
+        {
+          "status": 200,
+          "image": true,
+          "host": "www.70ts.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "www.70ts.com"
+        },
+        {
+          "status": 200,
+          "image": true,
+          "host": "www.70ts.com"
+        }
+      ],
+      "items": 30,
+      "withCover": 15,
+      "status": "checked"
+    }
+  ],
+  "limitations": [
+    "All-item cover availability is not claimed by three-item sampling",
+    "Some homepages require browser verification; no verification bypass attempted",
+    "Adult content sources received classification-only review",
+    "Missing source images are not replaced with unrelated artwork"
+  ]
+}

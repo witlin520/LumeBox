@@ -1,0 +1,13 @@
+name: lume_cat_node
+description: LumeBox iOS Node host for CatPaw subscriptions.
+version: 1.0.0
+environment:
+  sdk: ^3.13.4
+dependencies:
+  flutter:
+    sdk: flutter
+flutter:
+  plugin:
+    platforms:
+      ios:
+        pluginClass: LumeCatNodePlugin

@@ -1,0 +1,170 @@
+import '../../shared/widgets/source_translation.dart';
+
+import 'package:flutter/material.dart';
+
+import '../../core/source/source.dart';
+import '../../core/theme/lume_theme.dart';
+import '../../shared/widgets/chapter_tile.dart';
+import '../../shared/widgets/glass_card.dart';
+import '../../shared/widgets/state_view.dart';
+
+/// 详情页：作品信息 + 章节列表，全部经统一数据源接口取得。
+///
+/// 章节内容接口（[DataSource.content]）已在接口层就绪，但本页不消费它。
+class DetailPage extends StatefulWidget {
+  const DetailPage({super.key, required this.dataSource, required this.item});
+
+  final DataSource dataSource;
+  final SourceItem item;
+
+  @override
+  State<DetailPage> createState() => _DetailPageState();
+}
+
+class _DetailPageState extends State<DetailPage> {
+  SourceDetail? _detail;
+  List<SourceChapter> _chapters = const <SourceChapter>[];
+  bool _loading = true;
+  SourceException? _failure;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _failure = null;
+    });
+    try {
+      final detail = await widget.dataSource.detail(widget.item.id);
+      final chapters = await widget.dataSource.chapters(widget.item.id);
+      if (!mounted) return;
+      setState(() {
+        _detail = detail;
+        _chapters = chapters;
+        _loading = false;
+      });
+    } catch (error) {
+      if (error is! SourceException) rethrow;
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _failure = error;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return GlassScaffold(
+        effectModule: GlassModule.sources,
+        title: _title,
+        child: const SourceStateView(state: SourceStateKind.loading),
+      );
+    }
+    final failure = _failure;
+    if (failure != null) {
+      return GlassScaffold(
+        effectModule: GlassModule.sources,
+        title: _title,
+        child: SourceStateView(
+          state: stateForError(failure),
+          detail: failure.message,
+          onRetry: _load,
+        ),
+      );
+    }
+    final detail = _detail;
+    return GlassScaffold(
+      effectModule: GlassModule.sources,
+      title: _title,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: <Widget>[
+          GlassCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                SourceTranslationAction(
+                  texts: [
+                    detail?.title ?? widget.item.title,
+                    if (detail?.description != null) detail!.description!,
+                  ],
+                ),
+                SourceText(
+                  detail?.title ?? widget.item.title,
+                  style: TextStyle(
+                    fontSize: LumeTypography.pageTitleSize,
+                    fontWeight: FontWeight.w700,
+                    color: LumeTheme.textPrimary,
+                  ),
+                ),
+                if (detail?.subtitle != null) ...<Widget>[
+                  const SizedBox(height: 6),
+                  Text(
+                    detail!.subtitle!,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: LumeTypography.bodySize,
+                      color: LumeTheme.muted,
+                    ),
+                  ),
+                ],
+                if (detail?.description != null) ...<Widget>[
+                  const SizedBox(height: 10),
+                  SourceText(
+                    detail!.description!,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: LumeTypography.bodySize,
+                      height: 1.5,
+                      color: LumeTheme.textSecondary,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            '章节（${_chapters.length}）',
+            style: TextStyle(
+              fontSize: LumeTypography.titleSize,
+              fontWeight: FontWeight.w600,
+              color: LumeTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 10),
+          if (_chapters.isEmpty)
+            const SizedBox(
+              height: 180,
+              child: SourceStateView(
+                state: SourceStateKind.empty,
+                detail: kNoChaptersHint,
+              ),
+            )
+          else
+            // 章节行与漫画 / 视频三个板块共用同一套（用户口径 6）。
+            for (final chapter in _chapters)
+              ChapterTile(title: chapter.title, onTap: _notifyReaderPending),
+        ],
+      ),
+    );
+  }
+
+  /// 章节点击仅提示，Phase1 不进入阅读器（阅读器属 Phase2）。
+  void _notifyReaderPending() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(duration: Duration(seconds: 2), content: Text('阅读器尚未实现')),
+    );
+  }
+
+  /// 标题：板块名 · 图源名。
+  String get _title =>
+      '${widget.dataSource.section.label} · ${widget.dataSource.name}';
+}

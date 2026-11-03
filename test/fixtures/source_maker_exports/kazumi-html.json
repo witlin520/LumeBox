@@ -1,0 +1,15 @@
+{
+  "name": "制源测试",
+  "version": "1.0.0",
+  "api": "1",
+  "baseURL": "https://fixture.invalid/list",
+  "useNativePlayer": true,
+  "usePost": false,
+  "useLegacyParser": false,
+  "searchList": "//a[contains(@href,'/item/')]",
+  "searchName": "@title | .//img/@alt | .//text()[normalize-space()]",
+  "searchResult": ".",
+  "chapterRoads": "/html/body",
+  "chapterResult": "//a[contains(@href,'/chapter/')]",
+  "searchURL": "https://fixture.invalid/search?q=@keyword"
+}

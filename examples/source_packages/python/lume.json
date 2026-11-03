@@ -1,0 +1,6 @@
+{
+  "entry": "main.py",
+  "runtime": "python",
+  "protocol": "spider",
+  "metadata": {"id": "example-python-package", "name": "Python 多文件示例", "version": "1", "category": "video"}
+}

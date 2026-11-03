@@ -1,0 +1,20 @@
+name: Check source runtime (no IPA)
+on:
+  workflow_dispatch:
+jobs:
+  check-native:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    env:
+      PUB_HOSTED_URL: https://pub.flutter-io.cn
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+          cache: true
+      - name: Prepare Flutter iOS framework (no App build)
+        run: flutter precache --ios
+      - name: Compile WebKit, URLSession and SwiftSoup modules; typecheck native tests
+        run: bash tool/check_source_web_native.sh

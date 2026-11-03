@@ -1,0 +1,828 @@
+/// 图源数据模型与契约解析。
+///
+/// 三个板块（漫画 / 自定义视频 / 猫源）共用这一套模型：模型本身不持有
+/// 任何跨板块状态，也不认识沙箱、脚本与数据库。JS 适配器与模拟实现都产出
+/// 这里的类型，UI 只认这些类型。
+///
+/// 解析风格：集合类解析（分类 / 条目 / 章节 / 详情）保持宽容，无法识别的
+/// 输入返回空集合或 null；章节内容（单个载荷）保持严格，无法识别即抛
+/// [FormatException]，由适配器转成数据源层异常。
+library;
+
+import 'package:flutter/foundation.dart';
+import 'package:html/parser.dart' as html;
+
+/// 可选能力：**搜索联想词**（图源提供 `suggest` 时用服务端的，没有就用本地历史）。
+///
+/// 与弹幕能力同一套做法：能力做成接口，图源实现了就用，没实现就降级——
+/// 页面据此决定联想候选从哪来，而不是猜。
+abstract interface class SuggestCapable {
+  /// 取与 [keyword] 相关的联想词（可以为空）。
+  Future<List<String>> suggest(String keyword);
+}
+
+/// 图源能给出「首页」的可选能力（用户口径任务 3）。
+///
+/// 两套返回格式**由 App 自动识别**（脚本不用加开关）：
+/// - **多板块模式**：网页有横滑模块 → 返回板块数组（`title` / `moreUrl` / `items`）；
+/// - **旧兼容模式**：没有横滑、纯列表 → 直接返回标准 Item 数组，App 渲染普通网格。
+abstract interface class HomeCapable {
+  /// 本源是否**真的**实现了 `home()`。
+  ///
+  /// 老脚本没有它时必须是 false——否则首页模式会把「没有首页」当成「首页加载
+  /// 失败」，整块内容变成错误页（真机回归）。宿主据此决定：有 home 才进首页模式，
+  /// 没有就照旧走分类列表。
+  Future<bool> supportsHome();
+
+  Future<SourceHome> home();
+}
+
+/// 首页数据：要么是若干板块（横滑），要么是一份平铺列表（旧兼容）。
+class SourceHome {
+  const SourceHome({
+    this.boards = const <SourceHomeBoard>[],
+    this.items = const <SourceItem>[],
+  });
+
+  /// 多板块模式的内容（为空表示不是这一种）。
+  final List<SourceHomeBoard> boards;
+
+  /// 旧兼容模式的平铺条目（为空表示不是这一种）。
+  final List<SourceItem> items;
+
+  /// 是否多板块模式。
+  bool get isBoards => boards.isNotEmpty;
+
+  /// 整体是否为空（首页什么都没给：页面提示「暂无首页推荐内容」）。
+  bool get isEmpty => boards.isEmpty && items.isEmpty;
+
+  /// 自动识别解析（用户口径任务 3.1）：
+  /// - 数组里**有任何一个元素带 `items` 数组** → 当作板块数组；
+  /// - 否则当成标准 Item 数组（旧图源原样兼容）；
+  /// - Map 形式认 `boards` / `home` / `list` / `items` 键。
+  static SourceHome parse(Object? json) {
+    Object? raw = json;
+    if (raw is Map) {
+      raw =
+          raw['boards'] ??
+          raw['home'] ??
+          raw['sections'] ??
+          raw['list'] ??
+          raw['items'];
+    }
+    if (raw is! List) return const SourceHome();
+
+    // 识别：只要有一个元素「像板块」，整份就按板块解析（避免半吊子混排）。
+    final looksBoards = raw.any(
+      (entry) =>
+          entry is Map && (entry['items'] is List || entry['videos'] is List),
+    );
+    if (looksBoards) {
+      final boards = <SourceHomeBoard>[];
+      for (final entry in raw) {
+        final board = SourceHomeBoard.parse(entry);
+        if (board != null) boards.add(board);
+      }
+      return SourceHome(boards: List<SourceHomeBoard>.unmodifiable(boards));
+    }
+    return SourceHome(items: parseItems(raw));
+  }
+}
+
+/// 首页里的一个板块（横滑一行）。
+class SourceHomeBoard {
+  const SourceHomeBoard({
+    required this.title,
+    required this.items,
+    this.moreUrl,
+  });
+
+  /// 板块标题（**由图源返回**，App 不硬编码任何文字）。
+  final String title;
+
+  /// 「更多」跳转标识；空 / null 时隐藏更多按钮。
+  final String? moreUrl;
+
+  /// 板块内条目。
+  final List<SourceItem> items;
+
+  /// 解析一块；`title` 或 `items` 缺一不可（缺的整块跳过，不留空占位）。
+  static SourceHomeBoard? parse(Object? json) {
+    if (json is! Map) return null;
+    final title = '${json['title'] ?? json['name'] ?? ''}'.trim();
+    if (title.isEmpty) return null;
+    final rawItems = json['items'] ?? json['videos'] ?? json['list'];
+    final items = parseItems(rawItems is List ? rawItems : const <Object?>[]);
+    if (items.isEmpty) return null;
+    final more = '${json['moreUrl'] ?? json['more'] ?? json['more_url'] ?? ''}'
+        .trim();
+    return SourceHomeBoard(
+      title: title,
+      moreUrl: more.isEmpty ? null : more,
+      items: items,
+    );
+  }
+}
+
+/// 图源能给出「筛选标签」的可选能力（视频板块的筛选页用它）。
+///
+/// **为什么是契约而不是 App 内置一份**：各站点的筛选项各不相同（题材 / 地区 /
+/// 年份 / 语言 / 剧集类型…），写死在 App 里等于替站点做假设；用户也明确要求
+/// 「脚本不许硬编码分类数据，每次打开实时从源站抓」。
+abstract interface class FilterCapable {
+  /// 本源是否**真的**实现了 `filters()`。
+  ///
+  /// 与 [HomeCapable.supportsHome] 同一个理由：接口实现了不等于脚本写了——
+  /// 老脚本没有 `getFilters` 时直接调会抛「源脚本没有实现 filters 方法」，真机
+  /// 表现就是筛选页把一条脚本错误甩给用户（用户截图反馈过）。宿主先问清楚有没有，
+  /// 没有就显示「本源未提供筛选标签」。
+  Future<bool> supportsFilters();
+
+  /// 取本源的筛选标签组；不提供能力时不该被调用。
+  Future<List<SourceFilterGroup>> filters();
+}
+
+/// 可选的上下文筛选：类型变化后，题材等依赖项由源重新计算。
+abstract interface class ContextualFilterCapable {
+  Future<List<SourceFilterGroup>> filtersFor({
+    String? categoryId,
+    Map<String, String>? selection,
+  });
+}
+
+/// 一组筛选标签（一行横向标签）。
+class SourceFilterGroup {
+  const SourceFilterGroup({
+    required this.id,
+    required this.title,
+    required this.options,
+  });
+
+  /// 组标识（图源内唯一，如 `type` / `area` / `year`）。
+  final String id;
+
+  /// 组标题（如「剧集类型」「地区」）。
+  final String title;
+
+  /// 组内选项（可为空：空组不展示）。
+  final List<SourceFilterOption> options;
+
+  /// 宽容解析：认不出 id / title 或缺选项的组返回 null（整组跳过，不影响其它组）。
+  static SourceFilterGroup? parse(Object? json) {
+    if (json is! Map) return null;
+    final id = '${json['id'] ?? ''}'.trim();
+    final title = '${json['title'] ?? json['name'] ?? ''}'.trim();
+    if (id.isEmpty || title.isEmpty) return null;
+    final raw = json['options'] ?? json['items'] ?? json['list'];
+    final options = <SourceFilterOption>[];
+    if (raw is List) {
+      for (final entry in raw) {
+        final option = SourceFilterOption.parse(entry);
+        if (option != null) options.add(option);
+      }
+    }
+    if (options.isEmpty) return null;
+    return SourceFilterGroup(id: id, title: title, options: options);
+  }
+
+  /// 解析 `{ groups: [...] }` 或直接是一个数组的返回。
+  static List<SourceFilterGroup> parseAll(Object? json) {
+    final raw = json is Map ? (json['groups'] ?? json['list']) : json;
+    if (raw is! List) return const <SourceFilterGroup>[];
+    final groups = <SourceFilterGroup>[];
+    for (final entry in raw) {
+      final group = parse(entry);
+      if (group != null) groups.add(group);
+    }
+    return List<SourceFilterGroup>.unmodifiable(groups);
+  }
+}
+
+/// 筛选标签组里的一个选项。
+class SourceFilterOption {
+  const SourceFilterOption({required this.id, required this.title});
+
+  /// 选项标识（图源内唯一；送回去时原样回传）。
+  final String id;
+
+  /// 展示名（如「国产剧」「2024」）。
+  final String title;
+
+  static SourceFilterOption? parse(Object? json) {
+    if (json is Map) {
+      final id = '${json['id'] ?? json['value'] ?? ''}'.trim();
+      final title = '${json['title'] ?? json['name'] ?? json['label'] ?? ''}'
+          .trim();
+      if (title.isEmpty) return null;
+      return SourceFilterOption(id: id.isEmpty ? title : id, title: title);
+    }
+    // 纯字符串 / 数字写法：值即标识也即标题。
+    final text = '${json ?? ''}'.trim();
+    if (text.isEmpty) return null;
+    return SourceFilterOption(id: text, title: text);
+  }
+}
+
+/// 图源分类。
+class SourceCategory {
+  const SourceCategory({required this.id, required this.title});
+
+  /// 分类标识（图源内唯一）。
+  final String id;
+
+  /// 分类显示名。
+  final String title;
+
+  static SourceCategory? parse(Object? json) {
+    if (json is! Map) return null;
+    final id = '${json['id'] ?? ''}'.trim();
+    if (id.isEmpty) return null;
+    final title = '${json['title'] ?? ''}'.trim();
+    return SourceCategory(id: id, title: title.isEmpty ? id : title);
+  }
+}
+
+/// 列表条目。
+class SourceItem {
+  const SourceItem({
+    required this.id,
+    required this.title,
+    this.cover,
+    this.coverHeaders = const {},
+    this.subtitle,
+    this.mediaType = '',
+    this.duration,
+    this.updatedAt,
+  });
+
+  final String id;
+  final String title;
+  final String? cover;
+  final Map<String, String> coverHeaders;
+  final String? subtitle;
+
+  /// 时长（可选能力）：视频类图源常给（搜索结果里要显示「时长」）。
+  final String mediaType;
+
+  final Duration? duration;
+
+  /// 更新时间（可选能力）：搜索结果里要显示「更新时间」。
+  final DateTime? updatedAt;
+
+  /// 解析条目。宽容口径：视频类脚本常用 `{title, url}` 表达条目
+  /// （见图源契约的函数式写法），此时 `url` 兼作 id（详情 / 播放都按它取），
+  /// 标题也接受 `name` 写法；两者都缺才判定为不可识别。
+  ///
+  /// 时长与更新时间都是可选能力：给了就显示，没给就不显示（**不编造**）。
+  static SourceItem? parse(Object? json) {
+    if (json is! Map) return null;
+    final id = _text(json['id']) ?? _text(json['url']);
+    final title = _text(json['title']) ?? _text(json['name']);
+    if (id == null || title == null) return null;
+    // Only use an explicit source-provided thumbnail; never invent CDN URLs.
+    final thumbnail = _text(json['thumbnail']) ?? _text(json['thumb']);
+    return SourceItem(
+      id: id,
+      title: title,
+      coverHeaders: _stringMap(
+        thumbnail != null
+            ? json['thumbnailHeaders'] ?? json['coverHeaders']
+            : json['coverHeaders'],
+      ),
+      cover:
+          thumbnail ??
+          _text(json['cover']) ??
+          _text(json['image']) ??
+          _text(json['poster']),
+      mediaType:
+          _text(json['mediaType'] ?? json['contentType'] ?? json['kind']) ?? '',
+      subtitle: _text(json['subtitle']),
+      duration: parseDuration(
+        json['duration'] ?? json['时长'] ?? json['length'] ?? json['runtime'],
+      ),
+      updatedAt: parseTime(
+        json['updatedAt'] ??
+            json['updateTime'] ??
+            json['updated'] ??
+            json['time'] ??
+            json['date'],
+      ),
+    );
+  }
+
+  /// 时长解析（宽容）：秒数（int/double）、毫秒（>100000 视为毫秒）、
+  /// `12:34` / `01:02:03` 这类时钟文本都认；认不出返回 null。
+  static Duration? parseDuration(Object? value) {
+    if (value == null) return null;
+    if (value is num) {
+      if (value <= 0) return null;
+      // 大于 10 万的数按毫秒（视频动辄上万秒，按秒解读会得到几天）。
+      return value > 100000
+          ? Duration(milliseconds: value.round())
+          : Duration(seconds: value.round());
+    }
+    final text = '$value'.trim();
+    if (text.isEmpty) return null;
+    final clock = RegExp(r'^(\d{1,2}:)?\d{1,2}:\d{2}$');
+    if (clock.hasMatch(text)) {
+      final parts = text.split(':').map(int.parse).toList();
+      final seconds = parts.length == 3
+          ? parts[0] * 3600 + parts[1] * 60 + parts[2]
+          : parts[0] * 60 + parts[1];
+      return seconds <= 0 ? null : Duration(seconds: seconds);
+    }
+    final number = double.tryParse(text);
+    if (number != null && number > 0) {
+      return number > 100000
+          ? Duration(milliseconds: number.round())
+          : Duration(seconds: number.round());
+    }
+    // 「1小时20分」这类中文写法：只认「小时/分/秒」三种单位。
+    final chinese = RegExp(r'(?:(\d+)\s*小时)?\s*(?:(\d+)\s*分)?\s*(?:(\d+)\s*秒)?')
+        .firstMatch(text);
+    if (chinese != null &&
+        (chinese.group(1) ?? chinese.group(2) ?? chinese.group(3)) != null) {
+      final hours = int.tryParse(chinese.group(1) ?? '') ?? 0;
+      final minutes = int.tryParse(chinese.group(2) ?? '') ?? 0;
+      final seconds = int.tryParse(chinese.group(3) ?? '') ?? 0;
+      final total = hours * 3600 + minutes * 60 + seconds;
+      return total <= 0 ? null : Duration(seconds: total);
+    }
+    return null;
+  }
+
+  /// 时间解析（宽容）：ISO 文本 / 毫秒 / 秒时间戳都认；认不出返回 null。
+  static DateTime? parseTime(Object? value) {
+    if (value == null) return null;
+    if (value is num) {
+      if (value <= 0) return null;
+      final milliseconds = value > 100000000000
+          ? value.round()
+          : value.round() * 1000;
+      return DateTime.fromMillisecondsSinceEpoch(milliseconds);
+    }
+    final text = '$value'.trim();
+    if (text.isEmpty) return null;
+    final parsed = DateTime.tryParse(text);
+    if (parsed != null) return parsed;
+    final number = int.tryParse(text);
+    return number == null ? null : parseTime(number);
+  }
+}
+
+/// A source-provided person. TMDB is optional; modules can supply their own cast.
+class SourcePerson {
+  const SourcePerson({
+    required this.name,
+    this.id = '',
+    this.avatar,
+    this.role = '',
+    this.headers = const {},
+  });
+  final String id, name, role;
+  final String? avatar;
+  final Map<String, String> headers;
+
+  static SourcePerson? parse(Object? value) {
+    if (value is! Map) return null;
+    final name = _text(value['name'] ?? value['title']);
+    if (name == null) return null;
+    return SourcePerson(
+      id: '${value['id'] ?? ''}',
+      name: name,
+      avatar: _text(value['avatar']),
+      role: _text(value['role']) ?? '',
+      headers: _stringMap(value['headers']),
+    );
+  }
+}
+
+/// 条目详情。
+class SourceDetail {
+  const SourceDetail({
+    required this.id,
+    required this.title,
+    this.cover,
+    this.backdrop,
+    this.year = '',
+    this.mediaType = '',
+    this.cast = const [],
+    this.coverHeaders = const {},
+    this.subtitle,
+    this.description,
+    this.chapters = const [],
+    this.author,
+    this.status,
+    this.tags = const [],
+    this.updatedAt,
+    this.related = const [],
+  });
+
+  final String id;
+  final String title;
+  final String? cover;
+  final String? backdrop;
+  final String year, mediaType;
+  final List<SourcePerson> cast;
+  final Map<String, String> coverHeaders;
+  final String? subtitle;
+  final String? description;
+  final List<SourceChapter> chapters;
+  final String? author, status;
+  final List<String> tags;
+  final DateTime? updatedAt;
+  final List<SourceItem> related;
+
+  static SourceDetail? parse(Object? json) {
+    if (json is! Map) return null;
+    final id = '${json['id'] ?? ''}'.trim();
+    final title = '${json['title'] ?? ''}'.trim();
+    if (title.isEmpty) return null;
+    return SourceDetail(
+      id: id,
+      title: title,
+      cover: _text(json['cover']),
+      backdrop: _text(json['backdrop']),
+      year:
+          RegExp(r'^(?:19|20)\d{2}')
+              .stringMatch('${json['year'] ?? json['releaseDate'] ?? ''}') ??
+          '',
+      mediaType:
+          _text(json['mediaType'] ?? json['contentType'] ?? json['kind']) ?? '',
+      cast: (json['cast'] is List ? json['cast'] as List : const [])
+          .map(SourcePerson.parse)
+          .whereType<SourcePerson>()
+          .toList(),
+      coverHeaders: _stringMap(json['coverHeaders']),
+      subtitle: _text(json['subtitle']),
+      description: _text(json['description']),
+      chapters: parseChapters(json['chapters'] ?? json['episodes']),
+      author: _detailText(json['author'] ?? json['authors']),
+      status: _detailText(json['status']),
+      tags: (json['tags'] ?? json['genres']) is List
+          ? ((json['tags'] ?? json['genres']) as List)
+                .whereType<String>()
+                .map((value) => value.trim())
+                .where((value) => value.isNotEmpty)
+                .toList()
+          : const [],
+      updatedAt: SourceItem.parseTime(json['updatedAt'] ?? json['updateTime']),
+      related: parseItems(json['related'] ?? json['recommendations']),
+    );
+  }
+
+  static String? _detailText(Object? value) => value is String
+      ? _text(value)
+      : value is List
+      ? _text(value.whereType<String>().join('、'))
+      : null;
+}
+
+/// 章节条目。
+class SourceChapter {
+  const SourceChapter({
+    required this.id,
+    required this.title,
+    this.publishedAt,
+    this.line = '',
+    this.cover,
+    this.coverHeaders = const {},
+  });
+
+  final String id;
+  final String title;
+  final String line;
+  final String? cover;
+  final Map<String, String> coverHeaders;
+
+  /// 章节发布时间（可选能力）：追剧日历据此把「更新」归到某一天。
+  ///
+  /// 图源给了就带上（`publishedAt` / `published` / `updatedAt` / `date` 几种写法
+  /// 都认）；没给就是 null——日历只显示播放记录，不编造更新日期。
+  final DateTime? publishedAt;
+
+  static SourceChapter? parse(Object? json) {
+    if (json is! Map) return null;
+    final id = '${json['id'] ?? ''}'.trim();
+    if (id.isEmpty) return null;
+    final title = '${json['title'] ?? ''}'.trim();
+    return SourceChapter(
+      id: id,
+      title: title.isEmpty ? id : title,
+      line:
+          _text(
+            json['line'] ?? json['route'] ?? json['flag'] ?? json['road'],
+          ) ??
+          '',
+      cover: _text(json['cover'] ?? json['thumbnail']),
+      coverHeaders: _stringMap(json['coverHeaders']),
+      publishedAt: _parseTime(
+        json['publishedAt'] ??
+            json['published'] ??
+            json['updatedAt'] ??
+            json['date'],
+      ),
+    );
+  }
+
+  /// 宽容解析发布时间：ISO 字符串 / 毫秒时间戳 / 秒级时间戳。
+  static DateTime? _parseTime(Object? value) {
+    if (value == null) return null;
+    if (value is num) {
+      final millis = value > 100000000000
+          ? value.toInt()
+          : (value * 1000).round();
+      return DateTime.fromMillisecondsSinceEpoch(millis);
+    }
+    final text = '$value'.trim();
+    if (text.isEmpty) return null;
+    final numeric = num.tryParse(text);
+    if (numeric != null) return _parseTime(numeric);
+    return DateTime.tryParse(text);
+  }
+}
+
+/// 章节内容载荷：播放 / 阅读的统一出口。
+///
+/// 用密封类表达图片和视频载荷，阅读器与播放器可以对它做穷尽 switch，
+/// 不会因为漏掉一类内容而出错。
+sealed class ChapterContent {
+  const ChapterContent();
+
+  /// 解析契约 JSON。供 JS 适配器与测试使用。
+  ///
+  /// - `null` → null（该章节暂无内容）；
+  /// - 字符串数组 → [ImageContent]；
+  /// - `{kind: 'images' | 'video', ...}` → 对应类型；
+  /// - 其他输入 → 抛 [FormatException]（不符合契约）。
+  static ChapterContent? parse(Object? json) {
+    if (json == null) return null;
+    if (json is List) {
+      final images = _imageList(json);
+      return images.isEmpty ? null : ImageContent(images);
+    }
+    if (json is! Map) {
+      throw FormatException('无法识别的章节内容: $json');
+    }
+    final kind = '${json['kind'] ?? ''}'.trim().toLowerCase();
+    switch (kind) {
+      case 'text':
+      case 'novel':
+      case 'html':
+        final raw = json['text'] ?? json['body'] ?? json['html'];
+        if (raw is! String) throw const FormatException('小说章节缺少正文');
+        final text =
+            kind == 'html' || json['html'] != null || json['format'] == 'html'
+            ? TextContent.fromHtml(raw).text
+            : raw.trim();
+        return text.isEmpty ? null : TextContent(text);
+      case 'images':
+      case 'image':
+        final images = _imageList(json['images']);
+        final imageHeaders = <String, Map<String, String>>{};
+        final rawHeaders = json['imageHeaders'];
+        if (rawHeaders is Map) {
+          for (final entry in rawHeaders.entries) {
+            imageHeaders['${entry.key}'] = _stringMap(entry.value);
+          }
+        }
+        return images.isEmpty
+            ? null
+            : ImageContent(images, imageHeaders: imageHeaders);
+      case 'audio':
+      case 'audiobook':
+      case 'audio-book':
+      case 'video':
+        // 宽容口径：多线路脚本可能只给 qualities 不给 url——那就用第一条当默认。
+        final qualities = _qualityList(json['qualities'] ?? json['levels']);
+        final raw = '${json['url'] ?? ''}'.trim();
+        var uri = Uri.tryParse(raw);
+        if ((uri == null || !uri.hasScheme) && qualities.isNotEmpty) {
+          uri = qualities.first.url;
+        }
+        if (uri == null || !uri.hasScheme) {
+          throw FormatException('章节内容的 video.url 非法: $raw');
+        }
+        return VideoContent(
+          url: uri,
+          audioOnly: kind != 'video',
+          headers: _stringMap(json['headers']),
+          qualities: qualities,
+        );
+      default:
+        throw FormatException('未知的章节内容 kind: $kind');
+    }
+  }
+}
+
+/// Actual chapter body, never a synopsis or a URL to a web page.
+final class TextContent extends ChapterContent {
+  const TextContent(this.text);
+  final String text;
+
+  factory TextContent.fromHtml(String value) {
+    final document = html.parse(value);
+    document
+        .querySelectorAll('script,style,noscript,iframe')
+        .forEach((node) => node.remove());
+    for (final node in document.querySelectorAll('br')) {
+      node.replaceWith(html.parseFragment('\n'));
+    }
+    for (final node in document.querySelectorAll(
+      'p,div,section,article,li,h1,h2,h3',
+    )) {
+      node.append(html.parseFragment('\n\n'));
+    }
+    return TextContent(
+      (document.body?.text ?? '')
+          .replaceAll('\u00a0', ' ')
+          .replaceAll(RegExp(r'[ \t]+\n'), '\n')
+          .replaceAll(RegExp(r'\n{3,}'), '\n\n')
+          .trim(),
+    );
+  }
+}
+
+/// 图片列表（漫画 / 图集类）。
+final class ImageContent extends ChapterContent {
+  const ImageContent(this.images, {this.imageHeaders = const {}});
+
+  final List<String> images;
+  final Map<String, Map<String, String>> imageHeaders;
+}
+
+/// 视频地址（视频 / 猫源类）。
+final class VideoContent extends ChapterContent {
+  const VideoContent({
+    required this.url,
+    this.audioOnly = false,
+    this.headers = const <String, String>{},
+    this.qualities = const <VideoQuality>[],
+  });
+
+  final Uri url;
+  final bool audioOnly;
+
+  /// 播放时附带的请求头（防盗链等）。
+  final Map<String, String> headers;
+
+  /// 候选清晰度线路（图源给多条地址时才有；空列表 = 单线路）。
+  ///
+  /// **清晰度由图源数据决定，播放器只消费地址、不生成清晰度**（用户点名的
+  /// 口径）：这里存的就是图源给的地址与它的标签，播放器只负责把它们列出来。
+  final List<VideoQuality> qualities;
+
+  /// 是否提供了多条线路（决定「清晰度」按钮是弹菜单还是弹提示）。
+  bool get hasQualities => qualities.length > 1;
+}
+
+/// 一条候选清晰度线路：标签 + 地址（+ 该线路自己的请求头）。
+///
+/// 标签完全由图源决定（`1080P` / `超清` / `蓝光` 都行）：播放器不认识分辨率，
+/// 只把它当展示名——「图源说这是什么画质」比播放器猜要可靠。
+@immutable
+class VideoQuality {
+  const VideoQuality({
+    required this.label,
+    required this.url,
+    this.headers = const <String, String>{},
+    this.height = 0,
+  });
+
+  /// 展示名（图源给的原始标签）。
+  final String label;
+  final int height;
+
+  int get resolutionRank {
+    if (height > 0) return height;
+    final text = label.toLowerCase();
+    final size = RegExp(r'(\d{3,5})\s*[x×*]\s*(\d{3,5})').firstMatch(text);
+    if (size != null) return int.parse(size.group(2)!);
+    final pixels = RegExp(r'(\d{3,5})\s*p').firstMatch(text);
+    if (pixels != null) return int.parse(pixels.group(1)!);
+    if (RegExp(r'^\d{3,5}$').hasMatch(text)) return int.parse(text);
+    if (text.contains('8k')) return 4320;
+    if (text.contains('4k') || text.contains('uhd')) return 2160;
+    if (text.contains('2k')) return 1440;
+    if (text.contains('蓝光') ||
+        text.contains('藍光') ||
+        text.contains('原画') ||
+        text.contains('原畫')) {
+      return 1080;
+    }
+    if (text.contains('超清')) return 1080;
+    if (text.contains('高清')) return 720;
+    if (text.contains('标清') || text.contains('標清')) return 480;
+    return 0;
+  }
+
+  final Uri url;
+
+  /// 这一条线路自己的请求头；为空时沿用主地址的 headers。
+  final Map<String, String> headers;
+
+  @override
+  bool operator ==(Object other) =>
+      other is VideoQuality &&
+      other.label == label &&
+      other.url == url &&
+      other.height == height &&
+      other.headers.length == headers.length &&
+      other.headers.entries.every((entry) => headers[entry.key] == entry.value);
+
+  @override
+  int get hashCode => Object.hash(
+    label,
+    url,
+    height,
+    Object.hashAllUnordered(
+      headers.entries.map((entry) => Object.hash(entry.key, entry.value)),
+    ),
+  );
+
+  @override
+  String toString() => 'VideoQuality($label → $url)';
+}
+
+/// 解析候选清晰度线路。
+///
+/// 宽容口径（图源的写法五花八门，能救则救）：
+/// - 标签取 `label` / `name` / `quality` / `title` / `resolution` 里第一个非空的；
+/// - 地址取 `url` / `playUrl` / `src`；
+/// - 条目非法（没有地址）就跳过，不影响其余线路；
+/// - 标签缺失时用 `线路 N` 兜底——**不编造分辨率**（播放器不知道它是不是 1080P）。
+List<VideoQuality> _qualityList(Object? value) {
+  if (value is! List) return const <VideoQuality>[];
+  final qualities = <VideoQuality>[];
+  for (final entry in value) {
+    if (entry is! Map) continue;
+    final url =
+        _text(entry['url']) ??
+        _text(entry['playUrl']) ??
+        _text(entry['src']) ??
+        _text(entry['address']);
+    if (url == null) continue;
+    final uri = Uri.tryParse(url);
+    if (uri == null || !uri.hasScheme) continue;
+    final label =
+        _text(entry['label']) ??
+        _text(entry['name']) ??
+        _text(entry['quality']) ??
+        _text(entry['title']) ??
+        _text(entry['resolution']) ??
+        '线路 ${qualities.length + 1}';
+    qualities.add(
+      VideoQuality(
+        label: label,
+        url: uri,
+        headers: _stringMap(entry['headers']),
+        height: (entry['height'] as num?)?.toInt() ?? 0,
+      ),
+    );
+  }
+  return List<VideoQuality>.unmodifiable(qualities);
+}
+
+List<SourceCategory> parseCategories(Object? json) {
+  if (json is! List) return const <SourceCategory>[];
+  return json
+      .map(SourceCategory.parse)
+      .whereType<SourceCategory>()
+      .toList(growable: false);
+}
+
+List<SourceItem> parseItems(Object? json) {
+  if (json is! List) return const <SourceItem>[];
+  return json
+      .map(SourceItem.parse)
+      .whereType<SourceItem>()
+      .toList(growable: false);
+}
+
+List<SourceChapter> parseChapters(Object? json) {
+  if (json is! List) return const <SourceChapter>[];
+  return json
+      .map(SourceChapter.parse)
+      .whereType<SourceChapter>()
+      .toList(growable: false);
+}
+
+List<String> _imageList(Object? value) {
+  if (value is! List) return const <String>[];
+  return value
+      .whereType<String>()
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList(growable: false);
+}
+
+Map<String, String> _stringMap(Object? value) {
+  if (value is! Map) return const <String, String>{};
+  return value.map((key, item) => MapEntry('$key', '$item'));
+}
+
+String? _text(Object? value) {
+  if (value == null) return null;
+  final text = '$value'.trim();
+  return text.isEmpty ? null : text;
+}

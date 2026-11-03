@@ -1,0 +1,5 @@
+LUME_PYTHON_SLICE = $(PROJECT_DIR)/PythonRuntime/Python.xcframework/ios-arm64
+LUME_PYTHON_SLICE[sdk=iphonesimulator*] = $(PROJECT_DIR)/PythonRuntime/Python.xcframework/ios-arm64_x86_64-simulator
+HEADER_SEARCH_PATHS = $(inherited) "$(LUME_PYTHON_SLICE)/Python.framework/Headers"
+FRAMEWORK_SEARCH_PATHS = $(inherited) "$(LUME_PYTHON_SLICE)"
+OTHER_LDFLAGS = $(inherited) -framework Python

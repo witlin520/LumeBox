@@ -1,0 +1,735 @@
+import 'source_preferences.dart';
+import 'source_presentation_cache.dart';
+import 'tvbox_config.dart';
+import 'source_content_rating.dart';
+
+import '../net/network_cancellation.dart';
+
+import '../session/privacy_settings.dart';
+
+import '../cache/section_memory_cache.dart';
+import '../db/source_record.dart';
+import '../js/cat_engines.dart';
+import '../js/lume_js_engine.dart';
+import '../js/sandbox/sandbox.dart';
+import '../js/source_registry.dart';
+import '../js/source_engine.dart';
+import 'source_display_names.dart';
+import 'source_site_config.dart';
+import '../js/source_script.dart';
+import '../util/lume_log.dart';
+import '../session/section.dart';
+import 'data_source.dart';
+import 'js_data_source.dart';
+import '../net/source_subscription.dart';
+import 'source_manager.dart';
+
+/// 数据源门面：UI 侧访问图源的唯一入口，也是全项目唯一选择实现的地方。
+///
+/// UI 通过它做三件事：管理图源（列出 / 导入 / 启停 / 删除）、打开统一的
+/// [DataSource]、在页面退出时释放板块资源。沙箱、脚本、数据库都封在内部。
+///
+/// 平台边界：Phase1 只有 iOS 提供图源运行时；其余平台上本门面一律降级——
+/// 列表为空、打开返回 null，不触碰数据库与沙箱。
+class LumeSources {
+  LumeSources._();
+
+  /// 当前平台是否提供图源运行时（Phase1 只在 iOS 成立）。
+  ///
+  /// 这是「漫画 / 视频」的口径；猫源可能更宽（Android 上也有引擎），
+  /// 按板块判断请用 [runtimeAvailableFor]。
+  static bool get runtimeAvailable => LumeJsEngine.isSupported;
+
+  /// 某板块在当前平台是否有图源运行时。
+  ///
+  /// 猫源：Android（QuickJS / Node-Mobile 二选一）+ iOS；
+  /// 其余板块：仅 iOS（宪法第 1 条，Android / Windows 只保留骨架）。
+  static bool runtimeAvailableFor(Section section) =>
+      section == Section.cat ? CatEngines.available : runtimeAvailable;
+
+  /// 板块内的图源列表，供管理界面展示。
+  static Future<List<SourceDescriptor>> list(Section section) async {
+    if (!runtimeAvailableFor(section)) return const <SourceDescriptor>[];
+    final registry = await SourceRegistry.open(section);
+    final records = registry.sources;
+    final info = await _presentation.prepare([
+      for (final record in records)
+        (key: '${record.section}/${record.id}', script: record.script),
+    ]);
+    return [
+      for (var i = 0; i < records.length; i++)
+        _describe(records[i], info: info[i]),
+    ];
+  }
+
+  /// 用户给这个图源**显式配过**的 UA（图源网络覆盖 → 全局设置）；没配过返回 null。
+  ///
+  /// **给「网页视图」用**：返回 null 时验证窗自己派生一个「与设备 Safari 一致」的
+  /// UA（见 `WafWebViewPage` 的 UA 派生）——CF 会检测客户端一致性，写死版本号的
+  /// UA 会被当成内置控件、挑战页勾选框一闪就被跳走（真机反馈）。
+  /// 配过就照用：后续 API 请求也会用同一个（cf_clearance 绑 IP + UA）。
+  static Future<String?> userAgentFor(Section section, String sourceId) async {
+    if (!runtimeAvailableFor(section)) return null;
+    try {
+      final registry = await SourceRegistry.open(section);
+      // 用**用户显式配过**的 UA（configured），**不回落到内置默认值**：
+      // 没配过时网页视图要拿设备自己的 Safari UA（CF 会做客户端一致性检测，
+      // 写死版本号 / 带 WebView 特征会被强制跳走），而不是那串硬编码 UA。
+      final ua = registry.httpFor(sourceId).configuredUserAgent.trim();
+      return ua.isEmpty ? null : ua;
+    } catch (error) {
+      LumeLog.warn('[${section.id}] 解析 $sourceId 的 UA 失败：$error');
+      return null;
+    }
+  }
+
+  /// 导入图源脚本：先校验脚本，再把元信息与源码写入本板块数据库。
+  /// 脚本不合法或平台不支持时返回带原因的失败结果。
+  static Future<SourceImportResult> importScript(
+    Section section,
+    String script, {
+    String originUrl = '',
+    bool preserveLocalSources = false,
+  }) async {
+    if (!runtimeAvailableFor(section)) {
+      return const SourceImportResult.failure('当前平台不提供源运行时');
+    }
+    final registry = await SourceRegistry.open(section);
+    final outcome = await registry.import(
+      script,
+      originUrl: originUrl,
+      preserveLocalSources: preserveLocalSources,
+    );
+    final record = outcome.record;
+    if (record == null) {
+      return SourceImportResult.failure(outcome.message ?? '源导入失败');
+    }
+    return SourceImportResult.success(_describe(record), note: outcome.message);
+  }
+
+  /// 板块内当前图源：没有显式选择时回退到第一个启用的图源；
+  /// 板块内没有启用图源时返回 null。
+  static Future<SourceDescriptor?> currentSource(Section section) async {
+    if (!runtimeAvailableFor(section)) return null;
+    final registry = await SourceRegistry.open(section);
+    var record = registry.currentSource();
+    if (record != null &&
+        !PrivacySettings.instance.allowsSource(record.id, record.name)) {
+      record = registry.sources
+          .where(
+            (s) =>
+                s.enabled &&
+                PrivacySettings.instance.allowsSource(s.id, s.name),
+          )
+          .firstOrNull;
+    }
+    return record == null ? null : _describe(record);
+  }
+
+  /// 设定当前图源。图源不存在、跨板块或已停用时返回 null。
+  static Future<SourceDescriptor?> selectSource(
+    Section section,
+    String sourceId,
+  ) async {
+    if (!runtimeAvailableFor(section)) return null;
+    final registry = await SourceRegistry.open(section);
+    final candidate = registry.source(sourceId);
+    if (candidate != null &&
+        !PrivacySettings.instance.allowsSource(candidate.id, candidate.name)) {
+      return null;
+    }
+    final record = registry.selectSource(sourceId);
+    return record == null ? null : _describe(record);
+  }
+
+  /// 启用 / 停用图源。停用即释放它的运行时。
+  static Future<void> setEnabled(
+    Section section,
+    String sourceId,
+    bool enabled,
+  ) async {
+    if (!runtimeAvailableFor(section)) return;
+    final registry = await SourceRegistry.open(section);
+    registry.setEnabled(sourceId, enabled);
+  }
+
+  /// 设置单图源网络覆盖（UA / Cookie / 代理）；空串表示继承全局设置。
+  static Future<void> setNetwork(
+    Section section,
+    String sourceId, {
+    required String userAgent,
+    required String cookie,
+    required String proxy,
+    String bridge = '',
+    bool allowBadCertificate = false,
+  }) async {
+    if (!runtimeAvailableFor(section)) return;
+    final registry = await SourceRegistry.open(section);
+    registry.setSourceNetwork(
+      sourceId,
+      userAgent: userAgent,
+      cookie: cookie,
+      proxy: proxy,
+      bridge: bridge,
+      allowBadCertificate: allowBadCertificate,
+    );
+  }
+
+  /// 保存单图源的「换网址 / 账号登入」（镜像选择、自定义域名、登录账号。
+  ///
+  /// 落本板块库并释放对应运行时：下次 open 会用新域名、账号与脚本配置重建引擎，
+  /// 不必重新导入脚本。
+  static Future<void> setSiteConfig(
+    Section section,
+    String sourceId,
+    SourceSiteConfig config,
+  ) async {
+    if (!runtimeAvailableFor(section)) return;
+    final registry = await SourceRegistry.open(section);
+    registry.setSourceSiteConfig(sourceId, config);
+    final legacy = SourcePreferences.read(section, sourceId);
+    if (legacy.customOrigin.isNotEmpty || legacy.originalOrigin.isEmpty) {
+      await legacy
+          .copyWith(
+            customOrigin: '',
+            originalOrigin: legacy.originalOrigin.isEmpty
+                ? siteUrlFromScript(registry.source(sourceId)?.script ?? '')
+                : legacy.originalOrigin,
+          )
+          .save(section, sourceId);
+    }
+  }
+
+  static Future<void> invalidateRuntime(
+    Section section,
+    String sourceId,
+  ) async {
+    if (!runtimeAvailableFor(section)) return;
+    (await SourceRegistry.open(section)).release(sourceId);
+  }
+
+  /// 重命名图源：只改本板块库里的展示名（脚本与运行时保持原样）。
+  static Future<void> rename(
+    Section section,
+    String sourceId,
+    String name,
+  ) async {
+    if (!runtimeAvailableFor(section)) return;
+    final registry = await SourceRegistry.open(section);
+    registry.rename(sourceId, name);
+  }
+
+  /// 设置图源分组（空串取消分组）。只改展示归类，不改变归属板块。
+  static Future<void> setGroup(
+    Section section,
+    String sourceId,
+    String group,
+  ) async {
+    if (!runtimeAvailableFor(section)) return;
+    final registry = await SourceRegistry.open(section);
+    registry.setGroup(sourceId, group);
+  }
+
+  /// 手动恢复被标记失效的源（清零失败计数、解除失效标记）。
+  static Future<void> clearFailure(Section section, String sourceId) async {
+    if (!runtimeAvailableFor(section)) return;
+    final registry = await SourceRegistry.open(section);
+    registry.clearFailure(sourceId);
+  }
+
+  /// 导出图源脚本原文（备份用）；图源不存在或跨板块时返回 null。
+  static Future<String?> exportScript(Section section, String sourceId) async {
+    if (!runtimeAvailableFor(section)) return null;
+    final registry = await SourceRegistry.open(section);
+    return registry.scriptOf(sourceId);
+  }
+
+  /// 删除图源（含其运行时与脚本）。
+  static Future<void> remove(Section section, String sourceId) async {
+    if (!runtimeAvailableFor(section)) return;
+    final registry = await SourceRegistry.open(section);
+    registry.remove(sourceId);
+    _presentation.remove('${section.id}/$sourceId');
+  }
+
+  /// 打开统一数据源。图源不存在、已禁用或脚本载入失败时返回 null。
+  ///
+  /// [cached] 为真时接入**按板块隔离的内存读缓存**（分类 / 详情 / 章节）；
+  /// 连通性测试等「必须验证当下脚本」的场景传 false，走完全真实的链路。
+  static Future<DataSource?> open(
+    Section section,
+    String sourceId, {
+    bool cached = true,
+  }) async {
+    if (!runtimeAvailableFor(section)) return null;
+    final registry = await SourceRegistry.open(section);
+    SourceRecord? record;
+    for (final item in registry.sources) {
+      if (item.id == sourceId && item.enabled) {
+        record = item;
+        break;
+      }
+    }
+    if (record == null) return null;
+    if (!PrivacySettings.instance.allowsSource(record.id, record.name)) {
+      return null;
+    }
+    if (await registry.engineFor(sourceId) == null) return null;
+    return JsDataSource(
+      id: record.id,
+      name: SourceDisplayNames.of(record.id, record.name),
+      section: section,
+      runtime: _EngineRuntime(registry, sourceId),
+      cache: cached ? SectionMemoryCache.instance : null,
+      sourceConfiguration: () =>
+          registry.source(sourceId)?.siteConfig ?? SourceSiteConfig.none,
+      rewriteUrl: (url, {kind}) =>
+          registry.rewriteSourceUrl(sourceId, url, kind: kind),
+    );
+  }
+
+  /// 更新订阅源：从记录里的订阅地址重新拉取脚本并覆盖导入。
+  ///
+  /// 覆盖走的是与导入完全相同的校验路径（脚本载入 → 元信息 → 落库），因此
+  /// 更新后拿到的必然是一份能跑、且 id 合法的脚本；新脚本的 id 与旧的不同则
+  /// 视为「换了图源」，如实报失败（避免用户以为更新成功、实际多出一个源）。
+  static Future<SourceUpdateResult> updateFromSubscription(
+    Section section,
+    String sourceId, {
+    SourceSubscription? subscription,
+  }) async {
+    if (!runtimeAvailableFor(section)) {
+      return const SourceUpdateResult.skipped('当前平台不提供源运行时');
+    }
+    final registry = await SourceRegistry.open(section);
+    final record = registry.source(sourceId);
+    if (record == null) {
+      return const SourceUpdateResult.failed('源不存在或不属于本板块');
+    }
+    if (!record.isSubscribed) {
+      return const SourceUpdateResult.skipped('本地导入的源没有订阅地址，无法更新（可重新导入新脚本）');
+    }
+
+    final skipped = <String>[];
+    final resolver =
+        subscription ??
+        SourceSubscription.viaHttp(
+          // 清单里别的条目拉不到（脚本被删）不该挡住这一个源的更新：
+          // 记下来，更新完在结果里如实说明。
+          onSkip: (url, error) => skipped.add(
+            '${Uri.tryParse(url)?.pathSegments.last ?? url}（$error）',
+          ),
+        );
+    final List<String> scripts;
+    try {
+      final tvbox = TvBoxEntry.fromScript(record.script);
+      if (tvbox?.kind == TvBoxKind.python && tvbox!.api == record.originUrl) {
+        final response = await resolver.fetch(record.originUrl);
+        scripts = [tvbox.pythonScript(response.bytes)];
+      } else {
+        scripts = await resolver.resolve(<String>[record.originUrl]);
+      }
+    } catch (error, stackTrace) {
+      LumeLog.error(error, stackTrace);
+      return SourceUpdateResult.failed('订阅拉取失败：$error');
+    }
+    if (scripts.isEmpty) {
+      return const SourceUpdateResult.failed('订阅里没有可用的源脚本');
+    }
+
+    // 一个订阅链接里可能有好几份脚本（清单式订阅）：**按 id 找自己那一份**。
+    // 直接拿第一条会把别人的脚本当成自己的更新——轻则报「换了源 id」，
+    // 重则覆盖掉这个源。头部元信息读得到 id 就按 id 匹配；读不到（老脚本没写头）
+    // 退回第一条，后面的 id 校验会拦住错配。
+    var script = scripts.first;
+    if (scripts.length > 1) {
+      for (final candidate in scripts) {
+        if (SourceMetadata.parseHeader(candidate)?.id == record.id) {
+          script = candidate;
+          break;
+        }
+      }
+    }
+    if (script.trim() == record.script.trim()) {
+      return SourceUpdateResult.unchanged(_describe(record));
+    }
+
+    final outcome = await registry.import(script, originUrl: record.originUrl);
+    final updated = outcome.record;
+    if (updated == null) {
+      return SourceUpdateResult.failed(outcome.message ?? '更新失败');
+    }
+    if (updated.id != record.id) {
+      return SourceUpdateResult.failed(
+        '订阅里的脚本换了源 id（原「${record.id}」→ 新「${updated.id}」），'
+        '已按新脚本导入但未覆盖原源；请检查订阅内容',
+      );
+    }
+    // 覆盖导入不会动网络覆盖与来源地址（它们属于用户配置，不属于脚本）。
+    return SourceUpdateResult.updated(
+      _describe(updated),
+      previousVersion: record.version,
+      note: skipped.isEmpty
+          ? ''
+          : '订阅里另有 ${skipped.length} 条拉不到：${skipped.join('、')}',
+    );
+  }
+
+  /// 测试单个图源的连通性：载入脚本 → 取分类 → 取首屏列表。
+  ///
+  /// 只读操作：不动当前图源、不进页面、不改库。走的是与浏览完全相同的数据源
+  /// 接口，因此「测试通过」等价于「浏览能出内容」。
+  static Future<SourceTestResult> testConnectivity(
+    Section section,
+    String sourceId,
+  ) async {
+    if (!runtimeAvailableFor(section)) {
+      return const SourceTestResult.failed('当前平台不提供源运行时');
+    }
+    final registry = await SourceRegistry.open(section);
+    final record = registry.source(sourceId);
+    if (record == null) {
+      return const SourceTestResult.failed('源不存在或不属于本板块');
+    }
+    if (!record.enabled) {
+      return const SourceTestResult.failed('源已停用，先在列表里启用再测试');
+    }
+    if (!PrivacySettings.instance.allowsSource(record.id, record.name)) {
+      return const SourceTestResult.failed('成人内容已隐藏，请在隐私设置中开启后测试');
+    }
+    // 已标记失效的源不再自动重试（文档「图源损坏标记：标记失效源，不再自动重试」）。
+    // 手动单测仍允许——用户想亲眼确认它是否真的坏了，这是他的主动行为。
+    if (record.isBroken) {
+      return SourceTestResult.failed(
+        '源已被标记为失效（连续失败 ${record.failureCount} 次），'
+        '不再自动重试；确认可用后可在管理页「恢复」',
+      );
+    }
+
+    final watch = Stopwatch()..start();
+    try {
+      // 连通性测试不看缓存：它要验证的是「当下这份脚本能不能跑」。
+      final source = await open(section, sourceId, cached: false);
+      if (source == null) {
+        registry.recordFailure(sourceId);
+        return const SourceTestResult.failed('源打不开（脚本载入失败或引擎不可用）');
+      }
+
+      // 分类失败不算致命：拿不到分类就当图源没有分类（与浏览面同一口径）。
+      var categoryCount = 0;
+      try {
+        categoryCount = (await source.categories()).length;
+      } on SourceException catch (error) {
+        LumeLog.warn('[$sourceId] 测试：分类获取失败（不影响结论）: ${error.message}');
+      }
+
+      final list = await source.list(page: 1);
+      watch.stop();
+      // 能出内容即视为可用：清掉历史失败计数（站点恢复后不该还挂着旧账）。
+      registry.clearFailure(sourceId);
+      if (list.items.isEmpty) {
+        return SourceTestResult.empty(
+          elapsed: watch.elapsed,
+          message: '脚本能运行，但首屏没有返回任何条目（源可能已改版）',
+        );
+      }
+      return SourceTestResult.ok(
+        itemCount: list.items.length,
+        categoryCount: categoryCount,
+        elapsed: watch.elapsed,
+      );
+    } on SourceException catch (error) {
+      watch.stop();
+      registry.recordFailure(sourceId);
+      return SourceTestResult.failed(error.message);
+    } catch (error, stackTrace) {
+      watch.stop();
+      LumeLog.error(error, stackTrace);
+      return SourceTestResult.failed('测试异常：$error');
+    }
+  }
+
+  /// 释放板块的全部图源运行时与数据库连接（页面退出时调用）。
+  static void close(Section section) {
+    _presentation.clearSection(section.id);
+    SourceRegistry.close(section);
+  }
+
+  /// 取板块的图源管理端口（一个实例只服务一个板块）。
+  ///
+  /// 管理界面默认用它；注入替身的场景（测试）不经过本方法。
+  static SourceManager manager(Section section) => _LumeSourceManager(section);
+
+  static final _presentation = SourcePresentationCache();
+
+  /// Resolve the website without loading a source runtime.
+  static String siteUrlFromScript(String script) =>
+      SourceScriptPresentation.siteUrlFromScript(script);
+
+  static SourceDescriptor _describe(
+    SourceRecord record, {
+    SourceScriptPresentation? info,
+  }) {
+    info ??= _presentation.read(
+      '${record.section}/${record.id}',
+      record.script,
+    );
+    SourceContentRating.registerDeclaration(record.id, info.contentCategory);
+    return SourceDescriptor(
+      id: record.id,
+      runtimeKind: info.runtimeKind,
+      mediaKind: info.mediaKind,
+      contentCategory: info.contentCategory,
+      networkMode: info.network,
+      name: SourceDisplayNames.of(record.id, record.name),
+      version: record.version,
+      enabled: record.enabled,
+      network: record.network,
+      siteConfig: record.siteConfig.hasCustomDomain
+          ? record.siteConfig
+          : record.siteConfig.copyWith(
+              domainOverride: SourcePreferences.read(
+                Section.values.firstWhere((s) => s.id == record.section),
+                record.id,
+              ).customOrigin,
+            ),
+      originUrl: record.originUrl,
+      siteUrl: info.siteUrl,
+      iconUrl: info.iconUrl,
+      section: Section.values.where((s) => s.id == record.section).firstOrNull,
+      group: record.group,
+      failureCount: record.failureCount,
+      broken: record.isBroken,
+    );
+  }
+}
+
+/// [SourceManager] 的正式实现：把端口方法逐个委托给 [LumeSources] 的静态入口。
+///
+/// 它不新增任何能力，也不缓存状态——运行时、数据库与沙箱仍在注册表层，
+/// 因此停用、删除、导入之后的行为与直接调用门面完全一致。
+class _LumeSourceManager
+    implements
+        SourceManager,
+        SubscriptionImportManager,
+        SourceRevisionManager,
+        SourceInspectionManager {
+  _LumeSourceManager(this._section);
+
+  final Section _section;
+  @override
+  Future<SourceRevisionInfo?> previousVersion(String sourceId) async {
+    final old = (await SourceRegistry.open(_section)).previousSource(sourceId);
+    return old == null
+        ? null
+        : SourceRevisionInfo(
+            version: '${old['version']}',
+            savedAt: DateTime.fromMillisecondsSinceEpoch(old['savedAt'] as int),
+          );
+  }
+
+  @override
+  Future<SourceImportResult> restorePreviousVersion(String sourceId) async {
+    final outcome = await (await SourceRegistry.open(_section))
+        .restorePrevious(sourceId);
+    return outcome.record == null
+        ? SourceImportResult.failure(outcome.message ?? '恢复失败')
+        : SourceImportResult.success(LumeSources._describe(outcome.record!));
+  }
+
+  @override
+  Future<DataSource?> openForInspection(String sourceId) =>
+      LumeSources.open(_section, sourceId, cached: false);
+  @override
+  Future<String?> sourceLoadFailure(String sourceId) async =>
+      (await SourceRegistry.open(_section)).loadFailureFor(sourceId);
+
+  @override
+  bool get runtimeAvailable => LumeSources.runtimeAvailableFor(_section);
+
+  @override
+  Future<List<SourceDescriptor>> list() => LumeSources.list(_section);
+
+  @override
+  Future<SourceDescriptor?> current() => LumeSources.currentSource(_section);
+
+  @override
+  Future<SourceDescriptor?> select(String sourceId) =>
+      LumeSources.selectSource(_section, sourceId);
+
+  @override
+  Future<SourceImportResult> importScript(
+    String script, {
+    String originUrl = '',
+  }) => LumeSources.importScript(_section, script, originUrl: originUrl);
+
+  @override
+  Future<SourceImportResult> importSubscription(
+    String script, {
+    required String originUrl,
+  }) => LumeSources.importScript(
+    _section,
+    script,
+    originUrl: originUrl,
+    preserveLocalSources: true,
+  );
+
+  @override
+  Future<void> setEnabled(String sourceId, bool enabled) =>
+      LumeSources.setEnabled(_section, sourceId, enabled);
+
+  @override
+  Future<void> setNetwork(
+    String sourceId, {
+    required String userAgent,
+    required String cookie,
+    required String proxy,
+    String bridge = '',
+    bool allowBadCertificate = false,
+  }) => LumeSources.setNetwork(
+    _section,
+    sourceId,
+    userAgent: userAgent,
+    cookie: cookie,
+    proxy: proxy,
+    bridge: bridge,
+    allowBadCertificate: allowBadCertificate,
+  );
+
+  @override
+  Future<void> setSiteConfig(String sourceId, SourceSiteConfig config) =>
+      LumeSources.setSiteConfig(_section, sourceId, config);
+
+  @override
+  Future<void> invalidateRuntime(String sourceId) =>
+      LumeSources.invalidateRuntime(_section, sourceId);
+
+  @override
+  Future<void> rename(String sourceId, String name) =>
+      LumeSources.rename(_section, sourceId, name);
+
+  @override
+  Future<void> setGroup(String sourceId, String group) =>
+      LumeSources.setGroup(_section, sourceId, group);
+
+  @override
+  Future<void> clearFailure(String sourceId) =>
+      LumeSources.clearFailure(_section, sourceId);
+
+  @override
+  Future<String?> exportScript(String sourceId) =>
+      LumeSources.exportScript(_section, sourceId);
+
+  @override
+  Future<void> remove(String sourceId) =>
+      LumeSources.remove(_section, sourceId);
+
+  @override
+  Future<DataSource?> open(String sourceId) =>
+      LumeSources.open(_section, sourceId);
+
+  @override
+  Future<SourceTestResult> testConnectivity(String sourceId) =>
+      LumeSources.testConnectivity(_section, sourceId);
+
+  @override
+  Future<SourceUpdateResult> updateFromSubscription(String sourceId) =>
+      LumeSources.updateFromSubscription(_section, sourceId);
+
+  @override
+  // This facade borrows a shared section runtime. A page cannot own its lifetime.
+  // Explicit app-level teardown remains available through LumeSources.close.
+  void close() {}
+}
+
+/// 沙箱失败 → 数据源异常：把底层失败归一成展示层认识的三类。
+///
+/// 判定依据只有两处，都不靠猜文案：
+/// - 沙箱给出的类型：已释放 / 平台不支持 → [SourceErrorKind.notFound]；
+/// - 宿主代理在 HTTP 边界打出的网络标记 → [SourceErrorKind.network]；
+/// - 其余（脚本 bug、超时、契约不符）→ [SourceErrorKind.callFailed]。
+SourceException mapSandboxFailure(SandboxError error) {
+  final kind = switch (error.kind) {
+    SandboxErrorKind.disposed => SourceErrorKind.notFound,
+    SandboxErrorKind.unsupported => SourceErrorKind.notFound,
+    _ =>
+      error.message.contains(LumeSourceHost.networkFailureMarker)
+          ? SourceErrorKind.network
+          : SourceErrorKind.callFailed,
+  };
+  return SourceException(kind, error.toString());
+}
+
+/// 把图源引擎包装成 [JsSourceRuntime]。
+///
+/// 这是唯一知道「沙箱」与「数据源接口」如何对接的位置：引擎的失败结果在这里
+/// 归一成 [SourceException]，沙箱类型不再向上层泄漏。运行时按需从注册表取，
+/// 因此图源被停用后重建也能立刻生效，不会持有过期引擎。
+class _EngineRuntime implements JsSourceRuntime {
+  _EngineRuntime(SourceRegistry registry, this._sourceId)
+    : _section = registry.section;
+
+  final Section _section;
+  final String _sourceId;
+
+  @override
+  Future<Set<String>> contractMethods() async {
+    final registry = await SourceRegistry.open(_section);
+    return registry.withLease(() async {
+      final engine = await registry.engineFor(_sourceId);
+      if (engine == null) return const <String>{};
+      return await engine.contractMethods() ?? const <String>{};
+    });
+  }
+
+  @override
+  Future<Object?> call(String method, [Object? argument]) async {
+    final registry = await SourceRegistry.open(_section);
+    return registry.withLease(
+      () => _callWithRegistry(registry, method, argument),
+    );
+  }
+
+  Future<Object?> _callWithRegistry(
+    SourceRegistry registry,
+    String method,
+    Object? argument,
+  ) async {
+    NetworkCancellation.current?.check();
+    final engine = await registry.engineFor(_sourceId);
+    if (engine == null) {
+      throw const SourceException(SourceErrorKind.notFound, '源不可用（未启用或脚本载入失败）');
+    }
+    // 换网址 / 账号登入：调用前把**当下**的配置快照注入脚本上下文
+    // （`LumeSource.config`）。放在这里而不是引擎创建时，是为了让用户在设置里
+    // 改完域名 / 账号后，下一次调用就用新值——不必重新导入脚本、也不必重建引擎。
+    await _applyScriptConfig(registry, engine);
+    var result = await engine.callResult(method, argument);
+    NetworkCancellation.current?.check();
+    if (!result.isOk &&
+        result.error?.kind == SandboxErrorKind.disposed &&
+        method != 'postDanmaku') {
+      if (!registry.isDisposed) registry.release(_sourceId);
+      final fresh = await SourceRegistry.open(_section);
+      final replacement = await fresh.engineFor(_sourceId);
+      if (replacement != null) {
+        await _applyScriptConfig(fresh, replacement);
+        result = await replacement.callResult(method, argument);
+      }
+    }
+    if (result.isOk) return result.value;
+    throw mapSandboxFailure(result.error!);
+  }
+
+  /// 把配置快照交给支持注入的引擎；不支持的引擎直接跳过
+  /// （见 [ScriptConfigCapable]）。注入失败不影响这次调用本身。
+  Future<void> _applyScriptConfig(
+    SourceRegistry registry,
+    SourceEngine engine,
+  ) async {
+    if (engine is! ScriptConfigCapable) return;
+    await (engine as ScriptConfigCapable).applyScriptConfig(
+      registry.scriptConfigFor(_sourceId),
+    );
+  }
+}

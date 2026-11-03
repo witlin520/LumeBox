@@ -1,0 +1,495 @@
+import 'dart:async';
+
+import 'package:lume_box/shared/widgets/lume_icon.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+
+import '../../core/js/qjs_bindings.dart';
+import '../../core/js/sandbox/sandbox.dart';
+import '../../core/net/lume_net.dart';
+import '../../core/theme/lume_theme.dart';
+import '../../core/util/debug_request_log.dart';
+import '../../core/util/developer_mode.dart';
+import '../../core/util/lume_log.dart';
+import '../../shared/widgets/glass_card.dart';
+
+/// 调试面板（文档「调试日志规范」）：JS 执行记录 / 网络抓包 / 上下文统计。
+///
+/// 三个分区：
+/// 1. **开关**——开发者模式与请求抓包（抓包默认关闭，见 [DeveloperMode] 的说明）；
+/// 2. **请求抓包**——最近 200 条请求：方法 / 状态 / 耗时 / 来源 / 请求头（脱敏）；
+/// 3. **运行环境**——QuickJS 上下文在册数、放弃回收的 runtime 数、全局参数摘要。
+///
+/// 数据全部只留内存：进程退出即清空，**不落盘、不导出**。面板是排障窗口，
+/// 不是数据收集器。
+class DebugPanelPage extends StatefulWidget {
+  const DebugPanelPage({super.key, this.now});
+
+  /// 时钟（测试可注入，让时间戳可预期）。
+  final DateTime Function()? now;
+
+  @override
+  State<DebugPanelPage> createState() => _DebugPanelPageState();
+}
+
+class _DebugPanelPageState extends State<DebugPanelPage> {
+  late DeveloperModeSettings _settings = DeveloperMode.current;
+  StreamSubscription<void>? _changes;
+
+  @override
+  void initState() {
+    super.initState();
+    _changes = DebugRequestLog.changes.listen((_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _changes?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _apply(DeveloperModeSettings next) async {
+    setState(() => _settings = next);
+    try {
+      await DeveloperMode.save(next);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('保存失败：$error')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final records = DebugRequestLog.snapshot;
+    return GlassScaffold(
+      effectModule: GlassModule.settings,
+      behindBar: true,
+      title: '调试面板',
+      actions: <Widget>[
+        IconButton(
+          tooltip: '清空抓包',
+          icon: const LumeIcon(
+            Icons.delete_sweep_outlined,
+            slot: 'debug_panel_page.1',
+          ),
+          onPressed: records.isEmpty
+              ? null
+              : () {
+                  DebugRequestLog.clear();
+                  setState(() {});
+                },
+        ),
+      ],
+      child: ListView(
+        padding: GlassScaffold.barInset(context).add(const EdgeInsets.all(16)),
+        children: <Widget>[
+          _buildSwitches(),
+          const SizedBox(height: 12),
+          const GlassCard(
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: Text('怎么排查源加载失败'),
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: Text(
+                    '1. 打开开发者模式，再打开请求抓包。\n'
+                    '2. 清空旧记录，回到有问题的源，刷新或搜索一次。\n'
+                    '3. 回到这里，展开失败请求，查看状态、耗时和错误。\n'
+                    '4. 排查结束后关闭抓包，记录会清空。\n\n'
+                    '200：服务器已回应，还需检查返回内容和解析。\n'
+                    '403：访问被拒绝；404：地址不存在；429：请求太频繁；5xx：服务端异常。\n'
+                    '状态 0：查看错误说明，通常是网络连接或超时。\n\n'
+                    '这里记录 App 请求队列的请求，并非手机上所有网络流量；它用于找原因，不会自动修复源。',
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildCapture(records),
+          const SizedBox(height: 12),
+          const _RuntimeStatsCard(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSwitches() {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            '开关',
+            style: TextStyle(
+              fontSize: LumeTypography.sectionTitleSize,
+              fontWeight: FontWeight.w600,
+              color: LumeTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '抓包只留内存、不落盘、不导出；关闭开关会立即清空已记录的内容。',
+            style: TextStyle(
+              fontWeight: FontWeight.w400,
+              fontSize: LumeTypography.descriptionSize,
+              color: LumeTheme.descriptionColor,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(
+              '开发者模式',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: LumeTypography.titleSize,
+                color: LumeTheme.textPrimary,
+              ),
+            ),
+            subtitle: Text(
+              '打开后才可开启请求抓包',
+              style: TextStyle(
+                fontWeight: FontWeight.w400,
+                fontSize: LumeTypography.descriptionSize,
+                height: 1.5,
+                color: LumeTheme.descriptionColor,
+              ),
+            ),
+            value: _settings.enabled,
+            onChanged: (value) => _apply(
+              _settings.copyWith(
+                enabled: value,
+                // 总开关关掉时顺手关抓包：留着「已开但没生效」的开关会误导。
+                requestCapture: value ? _settings.requestCapture : false,
+              ),
+            ),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(
+              '请求抓包',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                fontSize: LumeTypography.titleSize,
+                color: LumeTheme.textPrimary,
+              ),
+            ),
+            subtitle: Text(
+              '记录每个请求的方法 / 状态 / 耗时 / 来源（凭据类请求头自动隐藏）',
+              style: TextStyle(
+                fontWeight: FontWeight.w400,
+                fontSize: LumeTypography.descriptionSize,
+                height: 1.5,
+                color: LumeTheme.descriptionColor,
+              ),
+            ),
+            value: _settings.requestCapture,
+            onChanged: _settings.enabled
+                ? (value) => _apply(_settings.copyWith(requestCapture: value))
+                : null,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCapture(List<DebugRequestRecord> records) {
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  '请求抓包',
+                  style: TextStyle(
+                    fontSize: LumeTypography.sectionTitleSize,
+                    fontWeight: FontWeight.w600,
+                    color: LumeTheme.textPrimary,
+                  ),
+                ),
+              ),
+              Text(
+                records.isEmpty ? '无记录' : '${records.length} 条',
+                style: TextStyle(
+                  fontWeight: FontWeight.w400,
+                  fontSize: LumeTypography.descriptionSize,
+                  height: 1.5,
+                  color: LumeTheme.descriptionColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            DebugRequestLog.enabled
+                ? '最近 ${DebugRequestLog.limit} 条请求（新 → 旧）'
+                : '抓包未开启：打开上面的开关后，这里会显示请求明细',
+            style: TextStyle(
+              fontWeight: FontWeight.w400,
+              fontSize: LumeTypography.descriptionSize,
+              height: 1.5,
+              color: LumeTheme.descriptionColor,
+            ),
+          ),
+          if (records.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 10),
+            for (final record in records.take(50))
+              _RequestTile(record: record, now: widget.now),
+            if (records.length > 50)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  '只显示最近 50 条（共 ${records.length} 条）',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w400,
+                    fontSize: LumeTypography.descriptionSize,
+                    height: 1.5,
+                    color: LumeTheme.descriptionColor,
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 一条请求记录：摘要一行，展开看请求头。
+class _RequestTile extends StatelessWidget {
+  const _RequestTile({required this.record, this.now});
+
+  final DebugRequestRecord record;
+  final DateTime Function()? now;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = record.isFailure ? LumeTheme.danger : LumeTheme.success;
+    return ExpansionTile(
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      title: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              record.describe(),
+              style: TextStyle(
+                fontWeight: FontWeight.w400,
+                fontSize: LumeTypography.bodySize,
+                height: 1.5,
+                color: color,
+              ),
+            ),
+          ),
+          Text(
+            '${record.source} · ${_clock(record.time)}',
+            style: TextStyle(
+              fontWeight: FontWeight.w400,
+              fontSize: LumeTypography.captionSize,
+              height: 1.5,
+              color: LumeTheme.muted,
+            ),
+          ),
+        ],
+      ),
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 2),
+        child: Text(
+          record.url,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontWeight: FontWeight.w400,
+            fontSize: LumeTypography.captionSize,
+            height: 1.5,
+            color: LumeTheme.muted,
+          ),
+        ),
+      ),
+      children: <Widget>[
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              if (record.error.isNotEmpty)
+                Text(
+                  '失败原因：${record.error}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w400,
+                    fontSize: LumeTypography.descriptionSize,
+                    height: 1.5,
+                    color: LumeTheme.danger,
+                  ),
+                ),
+              if (record.note.isNotEmpty)
+                Text(
+                  record.note,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w400,
+                    fontSize: LumeTypography.descriptionSize,
+                    height: 1.5,
+                    color: LumeTheme.descriptionColor,
+                  ),
+                ),
+              Text(
+                '响应体：${record.responseBytes} 字节',
+                style: TextStyle(
+                  fontWeight: FontWeight.w400,
+                  fontSize: LumeTypography.descriptionSize,
+                  height: 1.5,
+                  color: LumeTheme.descriptionColor,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '请求头',
+                style: TextStyle(
+                  fontSize: LumeTypography.descriptionSize,
+                  fontWeight: FontWeight.w400,
+                  height: 1.5,
+                  color: LumeTheme.textPrimary,
+                ),
+              ),
+              if (record.requestHeaders.isEmpty)
+                Text(
+                  '（无）',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w400,
+                    fontSize: LumeTypography.descriptionSize,
+                    height: 1.5,
+                    color: LumeTheme.descriptionColor,
+                  ),
+                ),
+              for (final entry in record.requestHeaders.entries)
+                Text(
+                  '${entry.key}: ${entry.value}',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w400,
+                    fontSize: LumeTypography.captionSize,
+                    height: 1.5,
+                    color: LumeTheme.muted,
+                  ),
+                ),
+              const SizedBox(height: 6),
+              TextButton.icon(
+                onPressed: () async {
+                  await Clipboard.setData(ClipboardData(text: record.url));
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context)
+                        .showSnackBar(const SnackBar(content: Text('已复制请求地址')));
+                  }
+                },
+                icon: const LumeIcon(
+                  Icons.copy,
+                  slot: 'debug_panel_page.2',
+                  size: 16,
+                ),
+                label: const Text(
+                  '复制地址',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: LumeTypography.descriptionSize,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  static String _clock(DateTime time) {
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${two(time.hour)}:${two(time.minute)}:${two(time.second)}';
+  }
+}
+
+/// 运行环境：QuickJS 上下文统计与全局参数摘要。
+class _RuntimeStatsCard extends StatelessWidget {
+  const _RuntimeStatsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = LumeNet.settings;
+    return GlassCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            '运行环境',
+            style: TextStyle(
+              fontSize: LumeTypography.sectionTitleSize,
+              fontWeight: FontWeight.w600,
+              color: LumeTheme.textPrimary,
+            ),
+          ),
+          const SizedBox(height: 8),
+          _row('在册 JS 上下文', '${SandboxContext.liveCount}'),
+          _row('放弃回收的 JSRuntime', '${Qjs.abandonedRuntimes}'),
+          _row('日志缓冲', '${LumeLog.snapshot.length} / ${LumeLog.bufferLimit}'),
+          _row(
+            '全局并发',
+            '${settings.globalConcurrency}（单域名 ${settings.perHostConcurrency}）',
+          ),
+          _row(
+            '请求超时',
+            '${settings.timeout.inSeconds}s（重试 ${settings.maxRetries} 次）',
+          ),
+          _row('全局 UA', settings.userAgent.isEmpty ? '内置默认' : '自定义'),
+          _row(
+            '全局代理',
+            defaultTargetPlatform == TargetPlatform.iOS
+                ? '跟随系统网络设置'
+                : settings.proxy.isEmpty
+                ? '直连'
+                : settings.proxy,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _row(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: 150,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w400,
+                fontSize: LumeTypography.descriptionSize,
+                height: 1.5,
+                color: LumeTheme.descriptionColor,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: FontWeight.w400,
+                fontSize: LumeTypography.descriptionSize,
+                height: 1.5,
+                color: LumeTheme.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

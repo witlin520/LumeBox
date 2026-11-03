@@ -1,0 +1,143 @@
+{
+  "observed_date": "2026-10-20",
+  "collection": {
+    "url": "https://rex.openharbor.dpdns.org/api/collections/hongguo.rex",
+    "module_count": 10,
+    "all_encrypted": true,
+    "modules": [
+      {
+        "id": "forward.hongguo.clean",
+        "title": "红果漫剧",
+        "bytes": 317369,
+        "sha256": "4e3dee7a18028f67a0c9441303aa0e976fbc021c955e5042ec3c2dcfbc347b7f",
+        "format": "REXENC",
+        "v": 2,
+        "alg": "A256GCM"
+      },
+      {
+        "id": "forward.hongguo.danmu",
+        "title": "通用短剧弹幕",
+        "bytes": 553173,
+        "sha256": "82a153cc439dc80b57f2113e1f2df573a42036cfc0c373d17e193501ff28b5e3",
+        "format": "REXENC",
+        "v": 2,
+        "alg": "A256GCM"
+      },
+      {
+        "id": "forward.qimao.short-drama",
+        "title": "七猫短剧",
+        "bytes": 31841,
+        "sha256": "6196cf807ca78fd42fdeada3490e9e5862d3d084b5b5a8055eaa98a5533acb68",
+        "format": "REXENC",
+        "v": 2,
+        "alg": "A256GCM"
+      },
+      {
+        "id": "forward.xingya.short-drama",
+        "title": "星芽免费短剧",
+        "bytes": 18901,
+        "sha256": "64eae17ab44c6ab70edd998bb305c1c912b97f2ac82328ca3f635d844ecb68a2",
+        "format": "REXENC",
+        "v": 2,
+        "alg": "A256GCM"
+      },
+      {
+        "id": "forward.hema.short-drama",
+        "title": "河马剧场",
+        "bytes": 19381,
+        "sha256": "66f54648f4dc751f86b8b8203664cb4584148798ec114ef00c6f63c216b53816",
+        "format": "REXENC",
+        "v": 2,
+        "alg": "A256GCM"
+      },
+      {
+        "id": "forward.xifan.short-drama",
+        "title": "喜番短剧",
+        "bytes": 92813,
+        "sha256": "6578717fdc7c94be6a340c2bb737ece7437bc388879c829a998f13a74189cca8",
+        "format": "REXENC",
+        "v": 2,
+        "alg": "A256GCM"
+      },
+      {
+        "id": "forward.weiguan.short-drama",
+        "title": "围观短剧",
+        "bytes": 25213,
+        "sha256": "565e0e8d073b7a19ba5827b13d83a07f59ca54ca40f73ea13c2c343b556782ec",
+        "format": "REXENC",
+        "v": 2,
+        "alg": "A256GCM"
+      },
+      {
+        "id": "forward.huolong.short-drama",
+        "title": "火龙免费漫剧",
+        "bytes": 121237,
+        "sha256": "be26ea190c944c8db1790c1db0aa0c906980f972f58f6179e07048c562e4d534",
+        "format": "REXENC",
+        "v": 2,
+        "alg": "A256GCM"
+      },
+      {
+        "id": "forward.youman.short-drama",
+        "title": "柚漫剧",
+        "bytes": 22961,
+        "sha256": "704e189ccd9c66439b1e844657fee49d08f21d6793a2c0816469b19937d2d548",
+        "format": "REXENC",
+        "v": 2,
+        "alg": "A256GCM"
+      },
+      {
+        "id": "forward.haokan.short-drama",
+        "title": "好看免费短剧",
+        "bytes": 17629,
+        "sha256": "a6630168e5d2e52d21375fd37c50f937f7e9f43dbf60deead84b01661da3527b",
+        "format": "REXENC",
+        "v": 2,
+        "alg": "A256GCM"
+      }
+    ]
+  },
+  "local_samples": [
+    {
+      "name": "大师兄(rex).js",
+      "bytes": 42668,
+      "sha256": "9a9760448b53aebdf95003e6c292a3ff32db6ccb8a6cc2e380968ba6c7d000d9",
+      "format": "WidgetMetadata",
+      "envelope": null,
+      "offline_playback_chain_verified": true,
+      "live_playback_verified": false
+    },
+    {
+      "name": "瓜子(rex).js",
+      "bytes": 67937,
+      "sha256": "a15121598ef7de96fdd78690c3adbce1775a4aa06458eff080cfdf88d08dd8ce",
+      "format": "REXENC",
+      "envelope": {
+        "v": 2,
+        "mkv": "rex-1",
+        "alg": "A256GCM"
+      },
+      "offline_playback_chain_verified": false,
+      "live_playback_verified": false
+    },
+    {
+      "name": "荐片(rex).js",
+      "bytes": 10816,
+      "sha256": "71b5c7b6c771242a3966fd9d7023b18310eb8e6e28ea8234ccd84176a8574b33",
+      "format": "WidgetMetadata",
+      "envelope": null,
+      "offline_playback_chain_verified": true,
+      "live_playback_verified": false
+    },
+    {
+      "name": "采集聚合(rex).js",
+      "bytes": 8163,
+      "sha256": "a85cb5ca6a301517c6134cdb943dc053614ea53112e7fcd8d86a4e38fbabe74f",
+      "format": "WidgetMetadata",
+      "envelope": null,
+      "offline_playback_chain_verified": true,
+      "live_playback_verified": false
+    }
+  ],
+  "validation": "Original plaintext scripts executed in native QuickJS with mocked HTTP; includes engine reopen and playback headers. Encrypted scripts were only identified, not decrypted."
+}

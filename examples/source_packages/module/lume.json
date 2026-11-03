@@ -1,0 +1,6 @@
+{
+  "entry": "main.mjs",
+  "runtime": "module",
+  "protocol": "lume",
+  "metadata": {"id": "example-js-package", "name": "JS 多文件示例", "version": "1", "category": "video"}
+}

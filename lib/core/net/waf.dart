@@ -1,0 +1,520 @@
+import 'dart:convert';
+
+import '../reading/reading.dart';
+import '../session/section.dart';
+import 'source_request_log.dart';
+import 'web_session_lifecycle.dart';
+import 'secure_connection_failure.dart';
+import '../util/lume_log.dart';
+
+/// Cloudflare / WAF 拦截的识别与会话（Cookie）保存（用户要求）。
+///
+/// ## 这套机制解决什么
+///
+/// 有些源站挂了 Cloudflare 的人机校验（「Just a moment…」/ 1020 / cf_clearance）：
+/// 直接请求只会拿到一张挑战页，脚本解析出空数据。用户要的是**在 App 内置网页视图
+/// 里手动过校验，再把会话取回来复用**——不是把分类写死，也不是放弃这家源。
+///
+/// ## 只对「需要校验」的源启用（用户口径第 7 条）
+///
+/// 普通源一次都不该走这条路：识别只看**明确的 WAF 指纹**（状态码 + 响应头 +
+/// 页面特征），识别不出就按原来的直连逻辑走，行为不变。
+class WafDetector {
+  WafDetector._();
+
+  /// 明确的 WAF 指纹：状态码 / 响应头 / 页面文本三选一命中即算。
+  ///
+  /// 只用**高置信**标记：`cf-mitigated` / `cf-chl` / `__cf_chl` 是 Cloudflare
+  /// 挑战的铁证；`just a moment` 与 `attention required` 是它的挑战页标题。
+  /// 不用「403 就算」这种粗判定——403 也可能是防盗链，把用户引到网页视图是错的。
+  static bool isChallenge({
+    required int statusCode,
+    Map<String, String> headers = const <String, String>{},
+    String body = '',
+  }) {
+    final headerText = headers.entries
+        .map((entry) => '${entry.key}: ${entry.value}')
+        .join('\n')
+        .toLowerCase();
+    if (headerText.contains('cf-mitigated') ||
+        headerText.contains('__cf_chl') ||
+        headerText.contains('cf-chl') ||
+        headerText.contains('challenge-platform')) {
+      return true;
+    }
+    final text = body.toLowerCase();
+    if (statusCode != 403 && statusCode != 503 && statusCode != 429) {
+      // CF can return a challenge document with HTTP 200. A normal article
+      // mentioning Cloudflare must not be mistaken for a verification page.
+      return RegExp(
+            r'<title[^>]*>\s*(just a moment|attention required)',
+            caseSensitive: false,
+          ).hasMatch(body) ||
+          (text.contains('challenge-platform') &&
+              (text.contains('__cf_chl') || text.contains('cf-chl-')));
+    }
+    return text.contains('need_webview_verify') ||
+        text.contains('waf_recaptcha_v3') ||
+        text.contains('just a moment') ||
+        text.contains('attention required') ||
+        text.contains('__cf_chl') ||
+        text.contains('cf-chl-') ||
+        // 挑战页里的脚本/iframe 地址（实测最常见的一条）。
+        text.contains('challenge-platform') ||
+        text.contains('checking your browser');
+  }
+}
+
+/// 某个图源的 WAF 会话：从网页视图取回来的整套 Cookie。
+///
+/// 存在**图源自己的配置存储**里（`reading.db` 的 reading_setting 表，键按图源
+/// id 分开）——与用户口径第 3 条一致；同一板块的其它源互不可见，清缓存也不会
+/// 碰它（它不是可再生的缓存，是用户手动过校验换来的凭证）。
+class WafSessionStore {
+  WafSessionStore(this.library);
+
+  final ReadingLibrary library;
+
+  /// 键前缀（后面接图源 id）。
+  static const String keyPrefix = 'waf.cookies.';
+
+  static String keyFor(String sourceId) => '$keyPrefix$sourceId';
+
+  /// 读取某图源保存的 Cookie 串（`a=1; b=2`）；没有则返回 null。
+  String? cookieHeader(String sourceId) {
+    final raw = library.setting(keyFor(sourceId));
+    if (raw == null || raw.trim().isEmpty) return null;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        final pairs = <String>[];
+        decoded.forEach((name, value) {
+          final key = '$name'.trim();
+          final text = '$value';
+          if (key.isNotEmpty && text.isNotEmpty) pairs.add('$key=$text');
+        });
+        return pairs.isEmpty ? null : pairs.join('; ');
+      }
+    } catch (error) {
+      LumeLog.warn('[waf] $sourceId 的会话读取失败：$error');
+    }
+    return null;
+  }
+
+  /// 保存 Cookie 表（网页视图关闭时调用）。
+  ///
+  /// 合并语义：同名的覆盖、新的追加——用户在网页里刷新过校验，新的
+  /// `cf_clearance` 必须盖掉旧的，否则等于没更新。
+  String? save(String sourceId, Map<String, String> cookies) {
+    if (cookies.isEmpty) return cookieHeader(sourceId);
+    final merged = <String, String>{};
+    final existing = cookieHeader(sourceId);
+    if (existing != null) {
+      for (final part in existing.split(';')) {
+        final index = part.indexOf('=');
+        if (index <= 0) continue;
+        merged[part.substring(0, index).trim()] = part
+            .substring(index + 1)
+            .trim();
+      }
+    }
+    cookies.forEach((name, value) {
+      if (name.trim().isNotEmpty && value.isNotEmpty) {
+        merged[name.trim()] = value;
+      }
+    });
+    library.setSetting(keyFor(sourceId), jsonEncode(merged));
+    LumeLog.info('[waf] $sourceId 保存会话 Cookie ${merged.length} 项');
+    return merged.entries
+        .map((entry) => '${entry.key}=${entry.value}')
+        .join('; ');
+  }
+
+  /// 清掉某图源的会话（网页视图里被拒 / 用户手动重置时用）。
+  void clear(String sourceId) {
+    final last = SourceRequestLog.lastFor(sourceId, quiet: true);
+    final host = last == null ? null : Uri.tryParse(last)?.host;
+    // Old sources may not have a recorded URL: revoke all browser capabilities.
+    WebSessionLifecycle.invalidate(
+      hosts: host == null || host.isEmpty ? null : {host},
+    );
+    library.setSetting(keyFor(sourceId), '');
+  }
+
+  /// 网页视图那套请求头里的 UA（键前缀后的 id）。
+  ///
+  /// Cloudflare 的 `cf_clearance` 与「IP + UA」绑定：验证用哪个 UA，后续请求就得
+  /// 用哪个 UA，否则 Cookie 带上了也照样 403。网页视图里读到什么就存什么。
+  static const String uaKeyPrefix = 'waf.ua.';
+
+  String? userAgent(String sourceId) {
+    final raw = library.setting('$uaKeyPrefix$sourceId');
+    return raw == null || raw.trim().isEmpty ? null : raw.trim();
+  }
+
+  void saveUserAgent(String sourceId, String? userAgent) {
+    final text = (userAgent ?? '').trim();
+    if (text.isEmpty || text == 'null') return;
+    library.setSetting('$uaKeyPrefix$sourceId', text);
+  }
+
+  /// 当前保存了多少项（设置页与提示文案用）。
+  int countOf(String sourceId) {
+    final header = cookieHeader(sourceId);
+    if (header == null) return 0;
+    return header.split(';').where((part) => part.trim().isNotEmpty).length;
+  }
+}
+
+/// WAF 会话在「图源 → 请求头」这条链路上的落点：由数据源在发请求前合并。
+///
+/// 为什么单独一个函数而不是塞进脚本里：Cookie 是**宿主凭据**，脚本不该也不
+/// 需要知道它从哪来；脚本只管照常 fetch，宿主负责带上（用户口径第 4 条）。
+String? mergeCookieHeader({
+  required String? existing,
+  required String? wafCookies,
+}) {
+  final left = existing?.trim() ?? '';
+  final right = wafCookies?.trim() ?? '';
+  if (left.isEmpty) return right.isEmpty ? null : right;
+  if (right.isEmpty) return left;
+  // 合并去重：以 WAF 会话为准（它是最新过校验的那一份）。
+  final merged = <String, String>{};
+  for (final part in <String>[...left.split(';'), ...right.split(';')]) {
+    final index = part.indexOf('=');
+    if (index <= 0) continue;
+    merged[part.substring(0, index).trim()] = part.substring(index + 1).trim();
+  }
+  return merged.entries
+      .map((entry) => '${entry.key}=${entry.value}')
+      .join('; ');
+}
+
+/// 从失败信息里认出「WAF 挑战」这一类（供页面决定要不要显示【网页视图】）。
+///
+/// 识别口径与 [WafDetector] 一致，但这里看的是**归一化后的错误文本**：脚本
+/// 抛出的 `拉取失败：HTTP 403` 一路传上来，宿主据此判断。
+bool looksLikeWafFailure(String? message) {
+  final text = (message ?? '').toLowerCase();
+  if (text.isEmpty) return false;
+  return text.contains('just a moment') ||
+      text.contains('__cf_chl') ||
+      text.contains('cf-chl') ||
+      text.contains('cf-mitigated') ||
+      text.contains('challenge') ||
+      // 云盾 / 长亭等国内 WAF 的常见字样。
+      text.contains('waf') ||
+      text.contains('security check') ||
+      text.contains('人机验证');
+}
+
+/// 板块：会话存储按板块打开（与图源配置同库）。
+Future<WafSessionStore> openWafSessionStore(Section section) async {
+  final library = await ReadingLibrary.open(section);
+  return WafSessionStore(library);
+}
+
+/// 会话的**同步查询入口**（给网络层用：请求前现取一次 Cookie）。
+///
+/// 为什么不做成「注册式」：板块库的打开时机分散在页面与预加载里，漏挂一处就是
+/// 「验证完了却不生效」。这里按板块惰性取**已打开**的库（[ReadingLibrary.find]），
+/// 库没打开就等于没有会话——语义简单，且不会顺手把库打开。
+class WafSessions {
+  WafSessions._();
+
+  static final Map<String, WafSessionStore> _stores =
+      <String, WafSessionStore>{};
+
+  /// 某板块的会话存储（库没打开时为 null）。
+  static WafSessionStore? storeOf(Section section) {
+    final library = ReadingLibrary.find(section);
+    if (library == null) {
+      _stores.remove(section.id);
+      return null;
+    }
+    final cached = _stores[section.id];
+    if (cached != null && identical(cached.library, library)) return cached;
+    final store = WafSessionStore(library);
+    _stores[section.id] = store;
+    return store;
+  }
+
+  /// 取某图源保存的会话 Cookie 串；没有则 null。
+  static String? cookiesFor(Section section, String sourceId) =>
+      storeOf(section)?.cookieHeader(sourceId);
+
+  /// 保存（网页视图关闭时调用）；库没打开则返回 null。
+  static String? save(
+    Section section,
+    String sourceId,
+    Map<String, String> cookies,
+  ) => storeOf(section)?.save(sourceId, cookies);
+
+  /// 某个图源当前有没有会话（页面据此显示「已取回会话」）。
+  static int countFor(Section section, String sourceId) =>
+      storeOf(section)?.countOf(sourceId) ?? 0;
+
+  /// 取某图源验证时用的 UA（没有则 null，网络层按原口径用全局 UA）。
+  static String? userAgentFor(Section section, String sourceId) =>
+      storeOf(section)?.userAgent(sourceId);
+
+  /// 保存验证时用的 UA。
+  static void saveUserAgent(
+    Section section,
+    String sourceId,
+    String? userAgent,
+  ) => storeOf(section)?.saveUserAgent(sourceId, userAgent);
+
+  /// 仅测试用：丢掉缓存句柄。
+  static void resetForTesting() => _stores.clear();
+}
+
+/// 从共享 WebKit Cookie 仓库中只选目标请求可发送的 Cookie。
+/// 同名时优先保留更具体的路径 / 域，避免其他站点的 clearance 覆盖当前凭证。
+Map<String, String> webViewCookiesForUrl(List<Object?> entries, String url) {
+  final uri = Uri.tryParse(url);
+  if (uri == null || uri.host.isEmpty) return const {};
+  final host = uri.host.toLowerCase();
+  final path = uri.path.isEmpty ? '/' : uri.path;
+  final candidates = <Map>[];
+  for (final entry in entries) {
+    if (entry is! Map) continue;
+    final rawDomain = '${entry['domain'] ?? ''}'.toLowerCase();
+    final domain = rawDomain.startsWith('.')
+        ? rawDomain.substring(1)
+        : rawDomain;
+    if (domain.isEmpty) continue;
+    final matches =
+        host == domain ||
+        (rawDomain.startsWith('.') && host.endsWith('.$domain'));
+    if (!matches) continue;
+    final cookiePath = '${entry['path'] ?? '/'}';
+    if (path != cookiePath &&
+        !(path.startsWith(cookiePath) &&
+            (cookiePath.endsWith('/') ||
+                (path.length > cookiePath.length &&
+                    path[cookiePath.length] == '/')))) {
+      continue;
+    }
+    if (entry['secure'] == true && uri.scheme != 'https') continue;
+    final expires = entry['expires'];
+    if (expires is num &&
+        expires * 1000 <= DateTime.now().millisecondsSinceEpoch) {
+      continue;
+    }
+    candidates.add(entry);
+  }
+  candidates.sort((a, b) {
+    final pathOrder = '${a['path'] ?? '/'}'.length.compareTo(
+      '${b['path'] ?? '/'}'.length,
+    );
+    return pathOrder != 0
+        ? pathOrder
+        : '${a['domain']}'.length.compareTo('${b['domain']}'.length);
+  });
+  final result = <String, String>{};
+  for (final entry in candidates) {
+    final name = '${entry['name'] ?? ''}'.trim();
+    final value = '${entry['value'] ?? ''}';
+    if (name.isNotEmpty && value.isNotEmpty) result[name] = value;
+  }
+  return result;
+}
+
+/// 脚本抛出的**固定标记**对应的处理方式（用户口径 2.1 / 2.2）。
+enum WafFailureKind {
+  /// 有可复用会话（cf_clearance 那类）：走内置网页视图取 Cookie。
+  webView,
+
+  /// 放行绑定浏览器会话 / IP 信誉，导不出可复用 Cookie（reCAPTCHA v3 等）：
+  /// 只能配「外部无头浏览器桥接服务」，**不展示网页视图按钮**。
+  bridge,
+}
+
+/// 从失败信息里判定走哪条路；null 表示不是 WAF 问题（普通失败只有「重试」）。
+///
+/// 两类识别顺序：**脚本的固定标记优先**（`NEED_WEBVIEW_VERIFY` /
+/// `WAF_RECAPTCHA_V3`，用户口径就是这么定的），认不出标记再退回指纹兜底
+/// （老的源没升级、或者 WAF 用别的方式拦），那一刻按「网页视图」处理。
+WafFailureKind? wafKindOf(String? message) {
+  final text = (message ?? '').toUpperCase();
+  if (text.isEmpty) return null;
+  if (text.contains('WAF_RECAPTCHA_V3')) return WafFailureKind.bridge;
+  if (text.contains('NEED_WEBVIEW_VERIFY')) return WafFailureKind.webView;
+  return looksLikeWafFailure(message) ? WafFailureKind.webView : null;
+}
+
+/// 这张错误卡要不要给「网页视图」出口。
+///
+/// 真机反馈（巴卡漫画首页超时）：卡片上写着「可点【网页视图】过校验」，按钮却不在
+/// ——因为那时的判定只看「是不是明确被 WAF 拦下」。实际上**打不开、超时、服务器
+/// 报错**这几类里，很大一部分也正是站点在拦（CF 拦到超时、回 503、空响应都常见），
+/// 用户唯一的自救手段就是自己打开站点看一眼。因此：
+/// - 明确需要验证 → 给；
+/// - 需要外部桥接（reCAPTCHA v3）→ 不给（网页视图对它无效）；
+/// - 超时 / 网络失败 / 403 / 429 / 5xx → 给（可能被拦，也可能只是慢）；
+/// - 其余（脚本错误、没有内容）→ 不给。
+bool webViewMayHelp(String? message) {
+  final kind = wafKindOf(message);
+  if (kind == WafFailureKind.bridge) return false;
+  if (kind == WafFailureKind.webView) return true;
+  if (secureConnectionFailureOf(message) != null) return false;
+  final text = (message ?? '').toUpperCase();
+  if (text.contains('超时') ||
+      text.contains('TIMEOUT') ||
+      text.contains('TIMED OUT')) {
+    return true;
+  }
+  if (text.contains('网络') ||
+      text.contains('连接') ||
+      text.contains('拒绝') ||
+      text.contains('中断') ||
+      text.contains('NETWORK') ||
+      text.contains('SOCKET') ||
+      text.contains('CONNECTION') ||
+      text.contains('HOST LOOKUP') ||
+      text.contains('HANDSHAKE') ||
+      text.contains('TLS_') ||
+      text.contains('DNS')) {
+    return true;
+  }
+  return RegExp(r'HTTP[ /]?(?:403|429|5\d\d)(?![0-9])').hasMatch(text);
+}
+
+/// 需要外部桥接时的统一文案（用户口径 2.2.4）。
+const String wafBridgeHint =
+    '该站点需要配置外部无头浏览器桥接服务，APP 无法直接访问。\n'
+    '（在「源管理 → 网络配置 → 桥接服务地址」里填一个已过验证的 Playwright / '
+    'Puppeteer 桥地址；普通 HTTP 代理无效。）';
+
+/// 从一个失败地址里取 origin（网页视图默认打开它）。
+String? originOf(String? url) {
+  final uri = Uri.tryParse(url ?? '');
+  if (uri == null || !uri.hasScheme || uri.host.isEmpty) return null;
+  return '${uri.scheme}://${uri.host}';
+}
+
+/// 失败的请求地址（图源契约没有暴露，这里从错误文本里捞；捞不到就用图源站点的
+/// 常见入口：让用户自己在网页里点一下也能过校验）。
+String? urlFromFailure(String? message) {
+  final text = message ?? '';
+  // 只取「http(s)://…」这一截：到空白 / 引号 / 括号为止（含全角括号）。
+  final match = RegExp('https?://[^\\s"\')\\uFF09]+').firstMatch(text);
+  return match?.group(0);
+}
+
+/// 弹「网页视图」时要打开的地址：**统一兜底链**，四层依次尝试。
+///
+/// 1. 失败文案里的 URL（脚本把地址写进报错文案时）——**整条地址，不裁成域名**；
+/// 2. **该图源最近请求过的地址**（见 [SourceRequestLog]——只要报的是 WAF 错，
+///    就一定发过请求；这条与脚本写法、导入方式都无关，是最可靠的一层），同样整条；
+/// 3. 图源的订阅地址（拿不到具体路径，退回域名）；
+/// 4. 源 id 里带的域名（导入器允许 `www.example.com_备注` 这种写法）。
+///
+/// **为什么必须要具体路径、不能只用域名**（真机反馈）：CF 的挑战是**按路径**下发的
+/// ——很多站点的首页早就被站点自己缓存/放行（实测 92 漫画就是），打开首页根本不会
+/// 出现勾选框，用户「验证」了个寂寞，接口依旧 403。打开**被拦的那一条地址**才会
+/// 触发挑战页，验证完拿到的 `cf_clearance` 才对这个域有效。
+///
+/// 都没有才返回 null（调用方**不要静默退出**：界面层会接着弹地址输入框，见
+/// `askWebViewOrigin`）。
+///
+/// [quiet] 关掉兜底层的那条 info 日志：界面在 build 里算「将打开哪个站」的提示
+/// 文案时会反复问同一个问题，那种查询不该刷日志。
+String? resolveWebViewOrigin({
+  String? failureMessage,
+  String? sourceId,
+  String? originUrl,
+  bool quiet = false,
+}) {
+  // ①② 拿得到具体地址就用具体地址（挑战按路径下发）。
+  final fromMessage = _absoluteUrlFrom(urlFromFailure(failureMessage));
+  if (fromMessage != null) return fromMessage;
+  final fromLog = _absoluteUrlFrom(
+    SourceRequestLog.lastFor(sourceId ?? '', quiet: quiet),
+  );
+  if (fromLog != null) return fromLog;
+  // ③④ 只有订阅地址 / 源 id 里的域名可用时，退回域名（聊胜于无）。
+  final fallback = guessWebViewAddress(
+    sourceId: sourceId,
+    originUrl: originUrl,
+  );
+  return fallback.isEmpty ? null : fallback;
+}
+
+/// 让一条 http(s) 地址保持原样返回（校验可解析且有主机），否则 null。
+///
+/// 与 [originOf] 的区别：**不裁路径**——被拦的就是那条路径。
+String? _absoluteUrlFrom(String? url) {
+  final text = (url ?? '').trim();
+  if (text.isEmpty) return null;
+  final uri = Uri.tryParse(text);
+  if (uri == null || !uri.hasScheme || uri.host.isEmpty) return null;
+  if (uri.scheme != 'http' && uri.scheme != 'https') return null;
+  return text;
+}
+
+/// 地址兜底链的**后两层**（订阅地址 → 源 id 里的域名），也用作地址输入框的预填值。
+///
+/// 单独抽出来是因为它有两个用处：解析链的尾部，和「四层全落空时」给用户看的
+/// 默认值——用户点开输入框就该看到最可能的那个站，而不是一个空框。
+String guessWebViewAddress({String? sourceId, String? originUrl}) {
+  final fromOrigin = originOf(originUrl);
+  if (fromOrigin != null) return fromOrigin;
+  final id = (sourceId ?? '').trim();
+  if (id.isNotEmpty) {
+    final head = id.split('_').first.trim();
+    if (head.contains('.')) {
+      final uri = Uri.tryParse('https://$head');
+      if (uri != null && uri.host.contains('.')) return 'https://${uri.host}';
+    }
+  }
+  return '';
+}
+
+/// 用户在地址输入框里手输 / 粘贴的内容 → 可打开的 origin。
+///
+/// 规整两件事：缺协议就补 `https://`，带路径 / 查询串就只留 origin（网页视图打开
+/// 源站首页即可触发校验，多余的部分只会让校验流程更难复现）。看不懂就返回 null
+/// （调用方在对话框里就地提示，不让用户点了没反应）。
+String? normalizeWebViewAddress(String? input) {
+  final text = (input ?? '').trim();
+  if (text.isEmpty) return null;
+  final uri = Uri.tryParse(text.contains('://') ? text : 'https://$text');
+  final host = uri?.host ?? '';
+  // 域名形状必须自己认一遍：`Uri` 会把 `https://随便写点什么` 这种解析成
+  // 百分号编码的 host，直接拿去开窗只会打不开——那又变成「点了没反应」。
+  if (!_looksLikeHost(host)) return null;
+  final scheme = uri?.scheme == 'http' ? 'http' : 'https';
+  return uri?.hasPort == true
+      ? '$scheme://$host:${uri!.port}'
+      : '$scheme://$host';
+}
+
+/// 域名形状：ASCII 字母数字与短横线，至少两段（`www.example.com`）。
+bool _looksLikeHost(String host) =>
+    RegExp(r'^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$').hasMatch(host);
+
+/// 错误卡片上给用户看的一句「点【网页视图】会打开哪个站」。
+///
+/// 加这一行是用户口径：报错信息里要能看出**源站地址确实拿到了**——三轮「点了
+/// 没反应」之后，用户需要一个当场能核对的证据。解析不出时返回 null（不给
+/// 空话，点击时的输入框会兜住）。
+///
+/// 文案口径（真机反馈修正）：**不写「将打开」**。自动通道已经在加载链路里一律
+/// 不许可（见 CHANGELOG ⑫①），应用不会自己弹出验证窗；写成「将打开」会让用户
+/// 干等一个永远不出现的窗口（真机三次实测都这样）。现在这句只说两件事：
+/// 地址是哪个 + 出口在哪。
+String? webViewTargetHint({
+  String? failureMessage,
+  String? sourceId,
+  String? originUrl,
+}) {
+  final url = resolveWebViewOrigin(
+    failureMessage: failureMessage,
+    sourceId: sourceId,
+    originUrl: originUrl,
+    quiet: true,
+  );
+  return url == null ? null : '可点【网页视图】过校验（目标站：$url）';
+}

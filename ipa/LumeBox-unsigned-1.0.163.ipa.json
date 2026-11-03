@@ -1,0 +1,15 @@
+{
+  "file": "D:\\Zcode\\LumeBox\\ipa\\LumeBox-unsigned-1.0.163.ipa",
+  "bytes": 333814713,
+  "version": "1.0.163",
+  "build": "163",
+  "bundle_id": "com.lumebox.app",
+  "commit": "0e6e530a68de3929653084bb9aff5d2b3c5611f0",
+  "sha256": "9a700fa4a97ac3e60598af2e25a70adee4e9ed5b49ede60c1dd0519b3e87f999",
+  "crc": "passed",
+  "intro_model_hashes": "passed",
+  "speech_pack_hashes": "passed",
+  "shaders": "passed",
+  "signing": "unsigned; requires user self-signing",
+  "device_acceptance": "pending"
+}

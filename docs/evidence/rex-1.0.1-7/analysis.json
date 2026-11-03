@@ -1,0 +1,345 @@
+{
+  "format": "lume.rex-ipa-evidence.v1",
+  "ipa_bytes": 91052990,
+  "ipa_sha256": "d75e2fdf16bd88a294bd2b36b26b37f8be5ed3737aa6f0c0ec18bc745eeb9ca6",
+  "app": {
+    "CFBundleIdentifier": "tv.rexnow.app",
+    "CFBundleExecutable": "Rex",
+    "CFBundleShortVersionString": "1.0.1",
+    "CFBundleVersion": "7",
+    "MinimumOSVersion": "17.0"
+  },
+  "executable": {
+    "bytes": 84773040,
+    "sha256": "2f59b22ad7f933364f6529bb9462b15b3d2c2d7a50bfeb60eecd1061e271de1a",
+    "encryption": [
+      {
+        "offset": 2981888,
+        "size": 4096,
+        "cryptid": 0
+      }
+    ]
+  },
+  "imports": {
+    "javascript": [
+      "_OBJC_CLASS_$_JSContext",
+      "_OBJC_CLASS_$_JSValue"
+    ],
+    "crypto": [
+      "_$s9CryptoKit12SymmetricKeyV4dataACx_tc10Foundation15ContiguousBytesRzlufC",
+      "_$s9CryptoKit12SymmetricKeyV4sizeAcA0cD4SizeV_tcfC",
+      "_$s9CryptoKit12SymmetricKeyVMa",
+      "_$s9CryptoKit12SymmetricKeyVMn",
+      "_$s9CryptoKit3AESO3GCMO4open_5using10Foundation4DataVAE9SealedBoxV_AA12SymmetricKeyVtKFZ",
+      "_$s9CryptoKit3AESO3GCMO5NonceV4dataAGx_tKc10Foundation12DataProtocolRzlufC",
+      "_$s9CryptoKit3AESO3GCMO5NonceVMa",
+      "_$s9CryptoKit3AESO3GCMO9SealedBoxV5nonce10ciphertext3tagAgE5NonceV_xq_tKc10Foundation12DataProtocolRzAmNR_r0_lufC",
+      "_$s9CryptoKit3AESO3GCMO9SealedBoxVMa",
+      "_CCCrypt",
+      "_CCCryptorCreate",
+      "_CCCryptorFinal",
+      "_CCCryptorRelease",
+      "_CCCryptorUpdate"
+    ],
+    "keychain": [
+      "_SecItemAdd",
+      "_SecItemCopyMatching",
+      "_SecItemDelete",
+      "_SecItemUpdate"
+    ],
+    "network": [
+      "_OBJC_CLASS_$_NSURLSession"
+    ]
+  },
+  "dependencies": [
+    "/System/Library/Frameworks/Security.framework/Security",
+    "/System/Library/Frameworks/CryptoKit.framework/CryptoKit",
+    "/System/Library/Frameworks/JavaScriptCore.framework/JavaScriptCore",
+    "@rpath/hwpatch.dylib"
+  ],
+  "swift_types": [
+    {
+      "name": "ScriptKeySessionClient",
+      "descriptor": "0x1040776e4",
+      "fields": [
+        "$defaultActor",
+        "environment",
+        "session",
+        "attest"
+      ]
+    },
+    {
+      "name": "ScriptEngineHub",
+      "descriptor": "0x1040872a8",
+      "fields": [
+        "$defaultActor",
+        "storageDirectory",
+        "downloadedCacheDirectory",
+        "http",
+        "tmdb",
+        "contentKeys",
+        "session",
+        "log",
+        "logRelay",
+        "engines",
+        "loadTasks",
+        "cacheGeneration",
+        "localSourceResolver",
+        "sourceAliases"
+      ]
+    },
+    {
+      "name": "ScriptJavaScriptRuntime",
+      "descriptor": "0x104087518",
+      "fields": [
+        "virtualMachine",
+        "queue",
+        "queueKey",
+        "queueValue",
+        "context",
+        "retainedBridgeObjects",
+        "callbacks",
+        "pendingInvocations",
+        "stringifyFunction",
+        "functionPredicate",
+        "lastExceptionMessage",
+        "log"
+      ]
+    },
+    {
+      "name": "ScriptModuleCrypto",
+      "descriptor": "0x104087690",
+      "fields": []
+    },
+    {
+      "name": "ScriptContentKeyStore",
+      "descriptor": "0x1040876c8",
+      "fields": [
+        "$defaultActor",
+        "keychainService",
+        "loadKey",
+        "saveKey",
+        "unwrapper",
+        "inflight"
+      ]
+    },
+    {
+      "name": "ScriptStorageBridge",
+      "descriptor": "0x104087840",
+      "fields": [
+        "local",
+        "shared"
+      ]
+    },
+    {
+      "name": "ScriptModuleEngine",
+      "descriptor": "0x1040878b8",
+      "fields": [
+        "configuration",
+        "source",
+        "sharesSource",
+        "executionID",
+        "playbackExecutions",
+        "runtime",
+        "control",
+        "invocationGate",
+        "requestGate",
+        "httpClient",
+        "tmdbClient",
+        "storageBridge",
+        "invocationContext",
+        "isCheerioLoaded",
+        "log",
+        "metadata",
+        "infoId",
+        "infoUrl"
+      ]
+    },
+    {
+      "name": "ScriptSharedStorageRegistry",
+      "descriptor": "0x104088010",
+      "fields": []
+    },
+    {
+      "name": "ScriptLocalStorageRegistry",
+      "descriptor": "0x10408802c",
+      "fields": []
+    }
+  ],
+  "widget_bridge_methods": [
+    "i18n",
+    "request",
+    "sharedCache.getItem",
+    "sharedCache.keys",
+    "sharedCache.removeItem",
+    "sharedCache.setItem",
+    "storage.clear",
+    "storage.getItem",
+    "storage.keys",
+    "storage.removeItem",
+    "storage.setItem",
+    "tmdb"
+  ],
+  "resources": [
+    {
+      "path": "RexScript_RexScript.bundle/cheerio.bundle.js",
+      "bytes": 579054,
+      "sha256": "e6cfa46f0a6fe614df1b1f2c3dd68981e81d1e07763353c2ba3b05d3da27729c"
+    },
+    {
+      "path": "RexScript_RexScript.bundle/Info.plist",
+      "bytes": 751,
+      "sha256": "7c9d5bec7d4203cedca52a607bf87fb4597ee396ac92261e0fb18fe45292dba3"
+    },
+    {
+      "path": "RexScript_RexScript.bundle/OfficialModules/bangumi.js",
+      "bytes": 17569,
+      "sha256": "ede29ac16135edf7d2d1e14d414a3712f1c052f16cc01ac3c12cbdb70a53707a"
+    },
+    {
+      "path": "RexScript_RexScript.bundle/OfficialModules/danmu.js",
+      "bytes": 29773,
+      "sha256": "5e8e6978a6f8a2d150362dbbcc82e5243e89c4b1b7ff21d16b8057fccd03e1c5"
+    },
+    {
+      "path": "RexScript_RexScript.bundle/OfficialModules/manifest.json",
+      "bytes": 11849,
+      "sha256": "5370701d2a15ad3d309fea42cdf343ff3e8139fe7b2f8816d42b3c3d7e2806df"
+    },
+    {
+      "path": "RexScript_RexScript.bundle/OfficialModules/nlsearch.js",
+      "bytes": 11691,
+      "sha256": "c822ae0036f0567c74774a7922d34bdd6ed8a0ba9cfd5692d2101614063bd72c"
+    },
+    {
+      "path": "RexScript_RexScript.bundle/OfficialModules/rex-tmdb.js",
+      "bytes": 53898,
+      "sha256": "784cbaff5196912b5839331f55b3dda7283116f6fd188157ae7f681246328037"
+    }
+  ],
+  "extra_dylibs": [
+    {
+      "path": "Frameworks/hwpatch.dylib",
+      "bytes": 1211104,
+      "sha256": "08ae535d22845c3a2660ab234c9014a66dba62a9e7b3d7fcb910c1488daf12dc"
+    }
+  ],
+  "anchors": {
+    "strings": [
+      {
+        "address": "0x104341870",
+        "text": "key_session.begin"
+      },
+      {
+        "address": "0x104341990",
+        "text": "key_session.success"
+      },
+      {
+        "address": "0x104342fa0",
+        "text": "/api/widgets/key-session"
+      },
+      {
+        "address": "0x104353100",
+        "text": "Content key unavailable"
+      },
+      {
+        "address": "0x104353120",
+        "text": "Decryption failed ("
+      },
+      {
+        "address": "0x104353140",
+        "text": "Unsupported module encryption; re-encrypt for Rex"
+      },
+      {
+        "address": "0x104353180",
+        "text": "Invalid encrypted payload"
+      }
+    ],
+    "references": [
+      {
+        "address": "0x1016d3e98",
+        "function": "0x1016d3da4",
+        "target": "0x104341870",
+        "text": "key_session.begin"
+      },
+      {
+        "address": "0x1016d59e4",
+        "function": "0x1016d52e4",
+        "target": "0x104341990",
+        "text": "key_session.success"
+      },
+      {
+        "address": "0x1017f4200",
+        "function": "0x1017f3d98",
+        "target": "0x104342fa0",
+        "text": "/api/widgets/key-session"
+      },
+      {
+        "address": "0x101e76ddc",
+        "function": "0x101e76db4",
+        "target": "0x104353180",
+        "text": "Invalid encrypted payload"
+      },
+      {
+        "address": "0x101e76df8",
+        "function": "0x101e76db4",
+        "target": "0x104353140",
+        "text": "Unsupported module encryption; re-encrypt for Rex"
+      },
+      {
+        "address": "0x101e76e0c",
+        "function": "0x101e76db4",
+        "target": "0x104353100",
+        "text": "Content key unavailable"
+      },
+      {
+        "address": "0x101e76e58",
+        "function": "0x101e76db4",
+        "target": "0x104353120",
+        "text": "Decryption failed ("
+      },
+      {
+        "address": "0x101e79324",
+        "function": "0x101e78ffc",
+        "target": "0x103e03974",
+        "symbol": "_$s9CryptoKit3AESO3GCMO4open_5using10Foundation4DataVAE9SealedBoxV_AA12SymmetricKeyVtKFZ"
+      }
+    ]
+  },
+  "limits": [
+    "Static inspection only; no app execution, decryption, service request or playback verification.",
+    "ADRP references are candidates; function naming and complete call flow require disassembly review."
+  ],
+  "module_samples": [
+    {
+      "file": "花卷(rex).js",
+      "bytes": 177817,
+      "sha256": "9f645be49f38f63ba11a227c1938c891d88949f87bad9d7526bfa6d0b0f92929",
+      "marker": "REXENC",
+      "header": {
+        "v": 2,
+        "mkv": "rex-1",
+        "alg": "A256GCM"
+      },
+      "iv_bytes": 12,
+      "kb_bytes": 60,
+      "ciphertext_and_tag_bytes": 133244,
+      "decrypted": false
+    },
+    {
+      "file": "TG搜(rex).js",
+      "bytes": 283241,
+      "sha256": "0e282dce528b3035e49f8ae6abc936d07433368898f95686095dba69c2fd7a9d",
+      "marker": "REXENC",
+      "header": {
+        "v": 2,
+        "mkv": "rex-1",
+        "alg": "A256GCM"
+      },
+      "iv_bytes": 12,
+      "kb_bytes": 60,
+      "ciphertext_and_tag_bytes": 212311,
+      "decrypted": false
+    }
+  ]
+}

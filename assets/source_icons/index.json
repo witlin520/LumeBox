@@ -1,0 +1,257 @@
+{
+  "pica177_comic": {
+    "name": "177漫畫",
+    "file": "pica177_comic.png",
+    "kind": "site",
+    "url": "https://www.177pica.com/wp-content/themes/azzxx/img/favicon.ico",
+    "sha256": "7db0496e4d71f9fcaf9b24c601024d74f93ed7b709aa37c8b59a7d4c5b5db6e3"
+  },
+  "hman8_comic": {
+    "name": "H漫黄漫天堂",
+    "file": "hman8_comic.svg",
+    "kind": "site",
+    "url": "https://hman8.com/images/favicon.svg",
+    "sha256": "ab456bc8bf80df4f4195d7af0f78b4229e0eb4b4503c696240a7b5a85925ca79"
+  },
+  "jcomic_comic": {
+    "name": "JComic",
+    "kind": "label",
+    "url": "https://jcomic.net",
+    "labels": [
+      "JComic"
+    ]
+  },
+  "yidan17_comic": {
+    "name": "一耽女孩",
+    "file": "yidan17_comic.png",
+    "kind": "site",
+    "url": "https://www.yidan17.club/static/favicon.ico",
+    "sha256": "eec8f7ebe1c887ea71c071fa18c1bb102192c72ac03d004078d1d349b4f7659a"
+  },
+  "drmh5_comic": {
+    "name": "大人漫画",
+    "file": "drmh5_comic.png",
+    "kind": "site",
+    "url": "https://drmh5.com/img/logo256.png",
+    "sha256": "086ab2303aae32c579e57e699187dd723181cc3137ac91f7bbae575be562c43b"
+  },
+  "jmdw8_comic": {
+    "name": "禁漫大王",
+    "file": "jmdw8_comic.svg",
+    "kind": "site",
+    "url": "https://jmdw8.com/images/favicon.svg",
+    "sha256": "3b44aead9d97e26dcba80033a8539f4c0e71f33d36b529da0f785390511962fc"
+  },
+  "jmd91_comic": {
+    "name": "禁漫岛",
+    "file": "jmd91_comic.svg",
+    "kind": "site",
+    "url": "https://91jmd.com/images/favicon.svg",
+    "sha256": "bfe8bc79b229de728a828a0f665ee1ed75efbe4230f4a77446f45708782204c3"
+  },
+  "seyoumanhua_comic": {
+    "name": "色友漫画",
+    "file": "seyoumanhua_comic.png",
+    "kind": "site",
+    "url": "https://seyoumanhua.com/template/wap/akin007/picture/logo.png",
+    "sha256": "9911e2da370d0e5275a2dcaf691126024484c113448f3614c50a9b7be949f920"
+  },
+  "smtt6_comic": {
+    "name": "色漫天堂",
+    "file": "smtt6_comic.svg",
+    "kind": "site",
+    "url": "https://smtt6.com/imgs/favicon.svg",
+    "sha256": "f0373d01e414f678ea2211905b0fb169168d75a1bd94fcc7802f4dfc548581c2"
+  },
+  "long91_comic": {
+    "name": "龙禁漫",
+    "file": "long91_comic.svg",
+    "kind": "site",
+    "url": "https://long91.com/imgs/favicon.svg",
+    "sha256": "dec337ea8b4409db243a0ccb427c523207b2806255cfbdb3cddc84765f7a04dd"
+  },
+  "tianlula_photo": {
+    "name": "天撸啦图集",
+    "kind": "label",
+    "url": "https://ttbd067.top:51000",
+    "labels": [
+      "天撸啦",
+      "图集"
+    ]
+  },
+  "v1024_video": {
+    "name": "1024Videos",
+    "file": "v1024_video.png",
+    "kind": "site",
+    "url": "https://1024videos.com/assets/videos2/favicon_x.jpeg",
+    "sha256": "740739974855df6241d7d8072c38a618ac1d98e8632a0ead8369da1fd9618012"
+  },
+  "x8x8_video": {
+    "name": "8x8x",
+    "kind": "label",
+    "url": "https://1azm0i.qcsw2b5yf.com",
+    "labels": [
+      "8x8x"
+    ]
+  },
+  "iwara_video": {
+    "name": "Iwara",
+    "file": "iwara_video.svg",
+    "kind": "site",
+    "url": "https://www.iwara.tv/logo.png",
+    "sha256": "6ab0ba057d98e82afe906294bfef845a58d0baf7834cd1509cc74d3874c8543c",
+    "adaptation": "暗底提高白色标识对比度"
+  },
+  "kkav_video": {
+    "name": "KKAV",
+    "file": "kkav_video.png",
+    "kind": "site",
+    "url": "https://www.92squr.com/static/favicon.ico",
+    "sha256": "473a9401a9cc985c6756e77920cb62adcec92dae1c2e36a366c09ada2966687a"
+  },
+  "twitthub_video": {
+    "name": "TwittHub",
+    "file": "twitthub_video.png",
+    "kind": "site",
+    "url": "https://www.twitthub.com/icon.png?icon.1047b00dsx1xq.png",
+    "sha256": "cb442a4816cb29d73dd04ce0a8a0d3b594a22eddaa98fbbc7073b632630c1e33"
+  },
+  "web-c2a8ddefdb15": {
+    "name": "ViralPorn",
+    "kind": "label",
+    "url": "https://viralporn.com/",
+    "labels": [
+      "Viral",
+      "Porn"
+    ]
+  },
+  "jipian3_video": {
+    "name": "三级片",
+    "kind": "label",
+    "url": "https://3jipian.cc",
+    "labels": [
+      "三级片"
+    ]
+  },
+  "hu4_video": {
+    "name": "四虎",
+    "file": "hu4_video.png",
+    "kind": "site",
+    "url": "https://www.4hu.tv/favicon.ico",
+    "sha256": "f5721970f62439e647fef0873c460578156ba61007a4898b21162e068e854437"
+  },
+  "dage_video": {
+    "name": "大哥视频",
+    "kind": "label",
+    "url": "",
+    "labels": [
+      "大哥",
+      "视频"
+    ]
+  },
+  "tianlula_video": {
+    "name": "天撸啦",
+    "kind": "label",
+    "url": "https://ttbd067.top:51000",
+    "labels": [
+      "天撸啦"
+    ]
+  },
+  "web-73acc40f9217": {
+    "name": "奶香香资源网",
+    "file": "web-73acc40f9217.png",
+    "kind": "site",
+    "url": "https://naixxzy3.com/template/default/images/logo.gif",
+    "sha256": "099d3285a6dd00f4f8cc86d50972d9f292db4f3b875be4a4f83ff6d6d514b392"
+  },
+  "hstv_video": {
+    "name": "好色TV",
+    "file": "hstv_video.png",
+    "kind": "site",
+    "url": "https://hstv.fun/assets/videos2/favicon_x.jpeg",
+    "sha256": "740739974855df6241d7d8072c38a618ac1d98e8632a0ead8369da1fd9618012"
+  },
+  "hsex_video": {
+    "name": "好色TV(hsex)",
+    "file": "hsex_video.png",
+    "kind": "site",
+    "url": "https://hsex.men/favicon.ico",
+    "sha256": "40b96abe50fb72efe16ec2f7a666ace3731be20a2294bc268365ce693db8efdb"
+  },
+  "yue5xi5_video": {
+    "name": "快猫 18+",
+    "kind": "site",
+    "url": "https://yue5xi5.xyz/pc/favicon.ico",
+    "file": "yue5xi5_video.png",
+    "sha256": "9d77746b621c316a4506458481a8e24c6db469c214a2d08891f223e2dda1cf10"
+  },
+  "mwx43zd_video": {
+    "name": "快猫镜像站 18+",
+    "kind": "site",
+    "url": "https://www.mwx43zd.xyz/pc/favicon.ico",
+    "file": "mwx43zd_video.png",
+    "sha256": "9d77746b621c316a4506458481a8e24c6db469c214a2d08891f223e2dda1cf10"
+  },
+  "tangtoutiao_video": {
+    "name": "汤头条 18+",
+    "file": "tangtoutiao_video.png",
+    "kind": "site",
+    "url": "https://p1.wgbqoiqv.com/favicon.ico",
+    "sha256": "2907e2e04588889cc04a421b6da233a0e55c84f029afd2d237271713f3c94235"
+  },
+  "haijiao_video": {
+    "name": "海角 18+",
+    "file": "haijiao_video.png",
+    "kind": "site",
+    "url": "https://haijiao.com/imgs/project/favicon.ico",
+    "sha256": "f6a45c2f0e26b22a6be56557afafecf40225fc67f86408e1aa572a050c6df423"
+  },
+  "haijiaoqing_video": {
+    "name": "海角情",
+    "file": "haijiaoqing_video.png",
+    "kind": "site",
+    "url": "https://www.haijiaolove.xyz/wp-content/uploads/2022/06/logo1-100x100.jpg",
+    "sha256": "026b915d03a2ee5e73a2d74958a280c81e9185e3bcf8351524f6df509b4fa0a1"
+  },
+  "aqd_video": {
+    "name": "爱情岛",
+    "kind": "label",
+    "url": "https://38.148.206.8:20955",
+    "labels": [
+      "爱情岛"
+    ]
+  },
+  "aido8_video": {
+    "name": "爱豆 18+",
+    "kind": "label",
+    "url": "https://ww15.aido8.icu",
+    "labels": [
+      "爱豆"
+    ]
+  },
+  "relamanhua_comic": {
+    "name": "熱辣漫畫",
+    "kind": "label",
+    "url": "",
+    "labels": [
+      "热辣",
+      "漫画"
+    ]
+  },
+  "h4dh3_video": {
+    "name": "hxc 18+",
+    "kind": "label",
+    "url": "https://j04l.nasuiyile.com",
+    "labels": [
+      "hxc"
+    ]
+  },
+  "theavporn_video": {
+    "name": "TheAVPorn",
+    "kind": "site",
+    "background": 2107448,
+    "file": "theavporn_video.png",
+    "url": "https://theavporn.com/favicon.ico",
+    "sha256": "00c064a110e56c552c7d96d142b842e103a0f9f98dd5682aa31c52cd4da27438"
+  }
+}

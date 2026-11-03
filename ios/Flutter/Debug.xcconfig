@@ -1,0 +1,7 @@
+#include "Generated.xcconfig"
+#include "PythonRuntime.xcconfig"
+
+// 弱链接 Translation.framework（iOS 18 才有）：部署目标降到 16.0 后，
+// 用 iOS 18 SDK 编译仍会生成硬加载命令，iOS 16 上 dyld 找不到会启动崩溃。
+// 代码已用 @available(iOS 18.0, *) / #available 守卫，弱链接后未调用即安全。
+OTHER_LDFLAGS = $(inherited) -weak_framework Translation

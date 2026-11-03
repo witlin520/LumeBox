@@ -1,0 +1,983 @@
+import 'package:lume_box/shared/widgets/lume_icon.dart';
+
+import '../../shared/widgets/drawer_geometry.dart';
+
+import 'dart:async';
+import 'dart:convert';
+
+import 'package:flutter/material.dart';
+
+import '../../core/session/privacy_settings.dart';
+import '../../core/search/search_settings.dart';
+import '../../core/net/network_cancellation.dart';
+
+import '../../core/reading/browse_layout.dart';
+import '../../core/reading/reading.dart';
+import '../../core/session/section.dart';
+import '../../core/source/source.dart';
+import '../../core/theme/lume_theme.dart';
+import '../../core/util/lume_log.dart';
+import '../../shared/widgets/glass_card.dart';
+import 'source_bar.dart';
+import 'browse_layout_button.dart';
+
+/// 排序方式（三个板块共用一套）。默认「默认」= 图源给的顺序，不改动。
+///
+/// 排序是**客户端**行为：只对**已经加载出来的这批条目**排序，不影响分页请求
+/// （图源契约里没有排序参数，硬塞一个会变成「声称支持但没验证」）。
+enum BrowseSort {
+  none('none', '默认'),
+  title('title', '标题'),
+  duration('duration', '时长'),
+  updated('updated', '更新时间');
+
+  const BrowseSort(this.id, this.label);
+
+  final String id;
+  final String label;
+
+  static BrowseSort fromId(String? id) {
+    for (final sort in values) {
+      if (sort.id == id) return sort;
+    }
+    return BrowseSort.none;
+  }
+
+  /// 对一批条目排序。**缺字段的条目永远排在后面**（不编造、不丢弃）。
+  List<SourceItem> apply(List<SourceItem> items) {
+    final sorted = List<SourceItem>.of(items);
+    switch (this) {
+      case BrowseSort.none:
+        break;
+      case BrowseSort.title:
+        sorted.sort(
+          (a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()),
+        );
+      case BrowseSort.duration:
+        sorted.sort((a, b) {
+          final left = a.duration;
+          final right = b.duration;
+          if (left == null && right == null) return 0;
+          if (left == null) return 1;
+          if (right == null) return -1;
+          return right.compareTo(left); // 长的在前
+        });
+      case BrowseSort.updated:
+        sorted.sort((a, b) {
+          final left = a.updatedAt;
+          final right = b.updatedAt;
+          if (left == null && right == null) return 0;
+          if (left == null) return 1;
+          if (right == null) return -1;
+          return right.compareTo(left); // 新的在前
+        });
+    }
+    return sorted;
+  }
+}
+
+/// 搜索模式（用户点名的两种）。
+enum SearchMode {
+  aggregate('aggregate', '聚合搜索', '跨本板块全部已启用源统一搜索，可勾选站点缩小范围'),
+  single('single', '当前源搜索', '只在当前选中的源内搜索');
+
+  const SearchMode(this.id, this.label, this.detail);
+
+  final String id;
+  final String label;
+  final String detail;
+}
+
+/// 一条搜索结果：条目 + 它来自哪个源（聚合搜索必须能说清来源）。
+@immutable
+class SearchHit {
+  const SearchHit({
+    required this.sourceId,
+    required this.sourceName,
+    required this.item,
+  });
+
+  final String sourceId;
+  final String sourceName;
+  final SourceItem item;
+}
+
+@immutable
+class AggregateSearchProgress {
+  const AggregateSearchProgress({
+    required this.hits,
+    required this.completed,
+    required this.total,
+    required this.failed,
+    required this.sources,
+    required this.completedSourceIds,
+    required this.failedSourceIds,
+  });
+  final List<SearchHit> hits;
+  final int completed;
+  final int total;
+  final int failed;
+  final List<SourceDescriptor> sources;
+  final Set<String> completedSourceIds;
+  final Set<String> failedSourceIds;
+}
+
+/// 聚合搜索：**并发**问本板块选中的已启用源，把结果合并回来。
+///
+/// 三条口径：
+/// - 单个源失败只丢它自己（结果里带一条 failed 说明），其余照常返回；
+/// - 结果按「源顺序」排列（保持用户看图源列表时的顺序感），不做跨源去重
+///   （同名作品在不同源上就是不同条目，去重会把用户想切的源吃掉）；
+/// - 有限并发，避免同时启动大量脚本；每完成一个源就通知界面显示结果。
+class AggregateSearch {
+  AggregateSearch._();
+
+  static Future<({List<SearchHit> hits, int failed})> run({
+    required List<SourceDescriptor> sources,
+    required Future<DataSource?> Function(String sourceId) open,
+    required String keyword,
+    String? categoryId,
+    int limitPerSource = 30,
+    Set<String>? sourceIds,
+    int concurrency = 4,
+    Duration sourceTimeout = const Duration(seconds: 30),
+    ValueChanged<AggregateSearchProgress>? onProgress,
+  }) async {
+    if (concurrency < 1 || sourceTimeout <= Duration.zero) {
+      throw ArgumentError('搜索并发和超时必须大于零');
+    }
+    final enabled = sources
+        .where(
+          (source) =>
+              keyword.trim().isNotEmpty &&
+              source.enabled &&
+              PrivacySettings.instance.allowsSource(source.id, source.name) &&
+              (sourceIds == null || sourceIds.contains(source.id)),
+        )
+        .toList();
+    final parent = NetworkCancellation.current;
+    final results = List<List<SearchHit>?>.filled(enabled.length, null);
+    var next = 0;
+    var completed = 0;
+    var failed = 0;
+    final completedIds = <String>{};
+    final failedIds = <String>{};
+    List<SearchHit> snapshot() => [for (final result in results) ...?result];
+    void publish() => onProgress?.call(
+      AggregateSearchProgress(
+        hits: List.unmodifiable(snapshot()),
+        completed: completed,
+        total: enabled.length,
+        failed: failed,
+        sources: List.unmodifiable(enabled),
+        completedSourceIds: Set.unmodifiable(completedIds),
+        failedSourceIds: Set.unmodifiable(failedIds),
+      ),
+    );
+    parent?.check();
+    publish();
+    Future<void> worker() async {
+      while (next < enabled.length) {
+        parent?.check();
+        final index = next++;
+        final descriptor = enabled[index];
+        final token = NetworkCancellation();
+        final unlink = parent?.onCancel(token.cancel);
+        final timer = Timer(
+          sourceTimeout,
+          () => token.cancel(TimeoutException('搜索源超时', sourceTimeout)),
+        );
+        try {
+          final list = await token.run(
+            () => token.guard(
+              Future.sync(() async {
+                token.check();
+                final source = await open(descriptor.id);
+                token.check();
+                return source?.list(
+                  categoryId: categoryId,
+                  keyword: keyword,
+                  page: 1,
+                );
+              }),
+            ),
+          );
+          parent?.check();
+          if (list == null) {
+            failed++;
+            failedIds.add(descriptor.id);
+          } else {
+            final seen = <String>{};
+            results[index] = [
+              for (final item
+                  in list.items
+                      .where(
+                        (item) => SearchSettings.instance.acceptsAggregate(
+                          item.title,
+                          keyword,
+                        ),
+                      )
+                      .where((item) => seen.add(item.id))
+                      .take(limitPerSource))
+                SearchHit(
+                  sourceId: descriptor.id,
+                  sourceName: descriptor.name,
+                  item: item,
+                ),
+            ];
+          }
+        } catch (error) {
+          parent?.check();
+          failed++;
+          failedIds.add(descriptor.id);
+          LumeLog.info('[search] 聚合搜索跳过 ${descriptor.name}：$error');
+        } finally {
+          timer.cancel();
+          unlink?.call();
+        }
+        completed++;
+        completedIds.add(descriptor.id);
+        publish();
+      }
+    }
+
+    await Future.wait([
+      for (var i = 0; i < concurrency && i < enabled.length; i++) worker(),
+    ]);
+    return (hits: snapshot(), failed: failed);
+  }
+}
+
+/// 搜索历史（按板块分开存；也是「没有 suggest 接口的源」的联想词来源）。
+///
+/// 存储直接用本板块阅读库的 settings 表（`reading_setting`），与浏览布局偏好同一层：
+/// 搜索历史是本地偏好，不是新数据源。
+class SearchHistoryStore {
+  const SearchHistoryStore(this._section, this._library);
+
+  final Section _section;
+  final ReadingLibrary _library;
+
+  /// 最多记住多少条（用户点名联想最多展示 8–10 条，历史留 20 条够挑）。
+  static const int maxEntries = 20;
+
+  static String keyFor(Section section) => 'search.history.${section.id}';
+
+  List<String> load() {
+    final raw = _library.setting(keyFor(_section));
+    if (raw == null || raw.trim().isEmpty) return const <String>[];
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is! List) return const <String>[];
+      return decoded
+          .map((item) => '$item'.trim())
+          .where((item) => item.isNotEmpty)
+          .toList(growable: false);
+    } catch (error) {
+      LumeLog.warn('[search] 搜索历史解析失败：$error');
+      return const <String>[];
+    }
+  }
+
+  /// 记一条（去重后放最前，超出上限截断）。
+  List<String> remember(String keyword) {
+    if (_library.setting('history.incognito') == 'true') return load();
+    final text = keyword.trim();
+    if (text.isEmpty) return load();
+    final next = <String>[
+      text,
+      for (final item in load())
+        if (item != text) item,
+    ].take(maxEntries).toList(growable: false);
+    try {
+      _library.setSetting(keyFor(_section), jsonEncode(next));
+    } catch (error) {
+      // 写不进去不影响搜索本身。
+      LumeLog.warn('[search] 搜索历史写库失败：$error');
+    }
+    return next;
+  }
+
+  void clear() {
+    try {
+      _library.setSetting(keyFor(_section), jsonEncode(const <String>[]));
+    } catch (error) {
+      LumeLog.warn('[search] 搜索历史清空失败：$error');
+    }
+  }
+}
+
+/// Null means all enabled sites; an explicit set never expands silently.
+class SearchSourceSelectionStore {
+  const SearchSourceSelectionStore(this.library);
+  final ReadingLibrary library;
+  static const key = 'search.aggregate.sourceIds';
+
+  Set<String>? load() {
+    try {
+      final raw = library.setting(key);
+      final value = raw == null ? null : jsonDecode(raw);
+      return value is List ? value.whereType<String>().toSet() : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void save(Set<String>? ids) {
+    try {
+      library.setSetting(key, jsonEncode(ids?.toList()));
+    } catch (error) {
+      LumeLog.warn('[search] 搜索站点选择保存失败：$error');
+    }
+  }
+}
+
+class SearchScopeSelection {
+  const SearchScopeSelection(this.mode, this.sourceIds);
+  final SearchMode mode;
+  final Set<String>? sourceIds;
+}
+
+/// 联想词来源：优先图源的 `suggest`，没实现就用本地搜索历史。
+class SearchSuggestions {
+  const SearchSuggestions({
+    required this.source,
+    required this.history,
+    this.candidates = const [],
+  });
+
+  /// 当前源（可能没有 suggest 能力）。
+  final DataSource? source;
+
+  /// 本地搜索历史。
+  final List<String> history;
+  final List<String> candidates;
+
+  /// 最多给几条（用户点名 8–10 条）。
+  static const int maxEntries = 10;
+
+  /// 取 [keyword] 的联想候选。
+  ///
+  /// 空输入不返回任何候选（用户点名「空输入不弹出」）。图源的 suggest 失败时
+  /// **退回本地历史**——联想是输入辅助，绝不能因为服务端挂了就空着。
+  Future<List<String>> forKeyword(String keyword) async {
+    final text = keyword.trim();
+    if (text.isEmpty) return const <String>[];
+    final source = this.source;
+    if (source is SuggestCapable) {
+      try {
+        final remote = await (source as SuggestCapable)
+            .suggest(text)
+            .timeout(const Duration(seconds: 3));
+        final cleaned = _dedupe(remote, text);
+        if (cleaned.isNotEmpty) return cleaned.take(maxEntries).toList();
+      } catch (error) {
+        LumeLog.info('[search] 联想接口失败，改用本地历史：$error');
+      }
+    }
+    // 输入时不执行完整搜索；真正的搜索只在提交时发起。
+    return localForKeyword(text);
+  }
+
+  List<String> localForKeyword(String keyword) => keyword.trim().isEmpty
+      ? history.take(maxEntries).toList()
+      : _dedupe([
+          ...history,
+          ...candidates,
+        ], keyword.trim()).take(maxEntries).toList();
+
+  /// 去重 + 只留包含关键词的 + 去掉与关键词本身相同的那条。
+  static List<String> _dedupe(List<String> values, String keyword) {
+    final seen = <String>{};
+    final out = <String>[];
+    for (final value in values) {
+      final text = value.trim();
+      if (text.isEmpty) continue;
+      final normalized = SearchSettings.instance.prepare(text).toLowerCase();
+      final query = SearchSettings.instance.prepare(keyword).toLowerCase();
+      if (!normalized.contains(query)) continue;
+      if (!seen.add(normalized)) continue;
+      out.add(text);
+    }
+    return out;
+  }
+}
+
+/// 板块浏览页的统一工具栏：**一行完整控件**，顺序固定（用户点名）：
+/// 源选择下拉框 → 排序 → 布局切换 → 搜索 → 筛选。
+///
+/// 三个板块共用同一个组件，因此「换了板块还找得到那个按钮」这件事不需要靠记忆。
+class SectionToolbar extends StatelessWidget {
+  const SectionToolbar({
+    super.key,
+    required this.sources,
+    required this.currentId,
+    required this.onSelect,
+    this.onManage,
+    required this.sort,
+    required this.onSortChanged,
+    required this.layoutMode,
+    required this.onLayoutChanged,
+    required this.onSearch,
+    this.onFilter,
+    this.showSort = true,
+    this.filterActive = false,
+    this.busy = false,
+    this.floating = false,
+    this.navigation,
+    this.section,
+    this.manager,
+    this.onSourcesChanged,
+  });
+
+  /// 本板块已启用的源。
+  final List<SourceDescriptor> sources;
+  final String? currentId;
+  final ValueChanged<String> onSelect;
+
+  /// 打开图源管理；为空时图源条里不显示这个入口（宿主顶栏已经有了）。
+  final VoidCallback? onManage;
+  final bool busy;
+  final bool floating;
+  final Widget? navigation;
+  final Section? section;
+  final SourceManager? manager;
+  final Future<void> Function()? onSourcesChanged;
+
+  final BrowseSort sort;
+  final ValueChanged<BrowseSort> onSortChanged;
+
+  final BrowseLayoutMode layoutMode;
+  final ValueChanged<BrowseLayoutMode> onLayoutChanged;
+
+  /// 点「搜索」：由宿主决定是弹模式菜单还是直接开搜索框。
+  final VoidCallback onSearch;
+
+  /// 点「筛选」：由宿主打开筛选抽屉。
+  final VoidCallback? onFilter;
+
+  /// 是否显示「排序」按钮。
+  ///
+  /// 用户要求漫画两块去掉它（那两块排序价值不大、工具栏也更挤），
+  /// 视频板块保留——因此做成开关而不是删掉。
+  final bool showSort;
+
+  /// 当前是否有生效的筛选（按钮高亮）。
+  final bool filterActive;
+
+  @override
+  Widget build(BuildContext context) {
+    final old = _legacyBuild(context);
+    return old;
+  }
+
+  Widget _legacyBuild(BuildContext context) {
+    if (navigation != null) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final sourceWidth = (width / 3).clamp(0.0, (width - 120) / 2);
+          return SizedBox(
+            height: 48,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SizedBox(
+                    width: sourceWidth,
+                    child: ReadingSourceBar(
+                      sources: sources,
+                      section: section,
+                      manager: manager,
+                      onSourcesChanged: onSourcesChanged,
+                      currentId: currentId,
+                      busy: busy,
+                      floating: true,
+                      onSelect: onSelect,
+                      onManage: onManage ?? () {},
+                      showManage: false,
+                    ),
+                  ),
+                ),
+                navigation!,
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: DrawerSearchAnchor(
+                    child: _ToolbarAction(
+                      floating: true,
+                      icon: Icons.search,
+                      tooltip: '搜索',
+                      onTap: onSearch,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      );
+    }
+    return Row(
+      children: <Widget>[
+        // 1) 源选择下拉框
+        Expanded(
+          child: ReadingSourceBar(
+            sources: sources,
+            section: section,
+            manager: manager,
+            onSourcesChanged: onSourcesChanged,
+            currentId: currentId,
+            busy: busy,
+            floating: floating,
+            onSelect: onSelect,
+            onManage: onManage ?? () {},
+            showManage: !floating && onManage != null,
+          ),
+        ),
+        const SizedBox(width: 8),
+        // 2) 排序（当前档位在弹窗里选中；这里靠高亮表示「不是默认」）。
+        //    漫画两块按用户要求不显示它（见 [showSort]）——注意**不是**
+        //    因为悬浮顶栏放不下：悬浮只是样式，功能入口不该跟着消失。
+        if (showSort)
+          _ToolbarAction(
+            floating: floating,
+            icon: Icons.sort,
+            tooltip: '排序',
+            highlighted: sort != BrowseSort.none,
+            onTap: () => _pickSort(context),
+          ),
+        // 3) 布局切换（显示模式）。
+        //
+        // 悬浮顶栏也要有（真机反馈「每个版块的显示模式找不到了」）：早先这里跟着
+        // `!floating` 一起藏了，而探索页现在正是悬浮顶栏——于是三个板块的布局入口
+        // 全都没了，用户只能一直用默认那一档。源下拉框是 Expanded，会自动让位。
+        BrowseLayoutButton(mode: layoutMode, onChanged: onLayoutChanged),
+        // 4) 搜索
+        DrawerSearchAnchor(
+          child: _ToolbarAction(
+            icon: Icons.search,
+            tooltip: '搜索',
+            onTap: onSearch,
+          ),
+        ),
+        // 5) 筛选
+        if (onFilter != null)
+          _ToolbarAction(
+            floating: floating,
+            icon: Icons.filter_list,
+            tooltip: '筛选',
+            highlighted: filterActive,
+            onTap: onFilter!,
+          ),
+      ],
+    );
+  }
+
+  Future<void> _pickSort(BuildContext context) async {
+    final picked = await showLumeBottomSheet<BrowseSort>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _ToolbarSheet<BrowseSort>(
+        title: '排序',
+        current: sort,
+        options: BrowseSort.values,
+        labelOf: (value) => value.label,
+        note: '只对已加载的条目排序（图源不提供排序参数）',
+      ),
+    );
+    if (picked != null) onSortChanged(picked);
+  }
+}
+
+/// 工具栏上的圆角小按钮。
+class _ToolbarAction extends StatelessWidget {
+  const _ToolbarAction({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.highlighted = false,
+    this.floating = false,
+  });
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool highlighted, floating;
+  @override
+  Widget build(BuildContext context) {
+    final content = Tooltip(
+      message: tooltip,
+      child: SizedBox(
+        width: 42,
+        height: 42,
+        child: LumeIcon(
+          icon,
+          slot: 'section_toolbar.1',
+          variant: true,
+          size: 20,
+          color: highlighted ? LumeTheme.accent : LumeTheme.textSecondary,
+        ),
+      ),
+    );
+    return Padding(
+      padding: const EdgeInsets.only(left: 6),
+      child: floating
+          ? Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: onTap,
+                borderRadius: BorderRadius.circular(21),
+                child: content,
+              ),
+            )
+          : GlassCard(
+              radius: 12,
+              padding: EdgeInsets.zero,
+              onTap: onTap,
+              child: content,
+            ),
+    );
+  }
+}
+
+/// 工具栏用的选择弹窗（排序 / 布局 / 搜索模式共用一套外观）。
+class _ToolbarSheet<T> extends StatelessWidget {
+  const _ToolbarSheet({
+    required this.title,
+    required this.current,
+    required this.options,
+    required this.labelOf,
+    this.detailOf,
+    this.note,
+  });
+
+  final String title;
+  final T current;
+  final List<T> options;
+  final String Function(T option) labelOf;
+  final String Function(T option)? detailOf;
+  final String? note;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      child: Material(
+        color: LumeTheme.base,
+        child: SafeArea(
+          top: false,
+          // **让开键盘**：这个弹窗经常是在「键盘已经弹起来」时打开的
+          //（搜索框带 autofocus，点右侧的模式标签切范围就是这种情况）——
+          // 不让开的话整份菜单落在键盘下面，用户看到的是「点搜索没有搜索框、
+          // 聚合 / 当前源也切不了」（真机反馈，实测选项 y=753 而键盘顶沿 524）。
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            // 让开键盘之后可用高度会明显变小（选项多时尤其），因此整份菜单
+            // 限高 + 选项区可滚：宁可滚，也不要溢出或被裁掉最后一个选项。
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        title,
+                        style: TextStyle(
+                          fontSize: LumeTypography.titleSize,
+                          fontWeight: FontWeight.w600,
+                          color: LumeTheme.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Flexible(
+                    child: Material(
+                      color: Colors.transparent,
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: <Widget>[
+                          for (final option in options)
+                            ListTile(
+                              dense: true,
+                              leading: LumeIcon(
+                                option == current
+                                    ? Icons.check_circle
+                                    : Icons.circle_outlined,
+                                slot: 'section_toolbar.2',
+                                variant: true,
+                                size: 20,
+                                color: option == current
+                                    ? LumeTheme.accent
+                                    : LumeTheme.muted,
+                              ),
+                              title: Text(
+                                labelOf(option),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: LumeTheme.textPrimary,
+                                ),
+                              ),
+                              subtitle: detailOf == null
+                                  ? null
+                                  : Text(
+                                      detailOf!(option),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize:
+                                            LumeTypography.descriptionSize,
+                                        color: LumeTheme.descriptionColor,
+                                      ),
+                                    ),
+                              onTap: () => Navigator.of(context).pop(option),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (note != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 4, 20, 6),
+                      child: Text(
+                        note!,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: LumeTypography.captionSize,
+                          color: LumeTheme.muted,
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 打开「搜索模式」选择菜单（用户点名的两种模式）。
+///
+/// **标准单选组**：点一行，圆点立刻移过去；点「应用」才生效。
+///
+/// 两个真机问题都在这里修掉：
+/// 1. 以前是「点一下就关」的列表，用户看到的只是弹窗消失——单选按钮**看起来
+///    点不动**；现在点行只改选中态，圆点当场跟着走。
+/// 2. 以前进面板时把选中项写死成 `single`（还用不到当前模式），于是「输入框右侧
+///    写着聚合搜索、面板里勾着当前源搜索」，两边永远对不上；现在 [current] 由
+///    调用方传入，面板与标签双向同步。
+Future<SearchScopeSelection?> showSearchModeMenu(
+  BuildContext context, {
+  required SearchMode current,
+  List<SourceDescriptor> sources = const [],
+  Set<String>? sourceIds,
+  bool sitesOnly = false,
+}) {
+  return showLumeBottomSheet<SearchScopeSelection>(
+    context: context,
+    backgroundColor: Colors.transparent,
+    // **不受默认高度限制**：默认弹窗最高只有屏幕的 9/16，键盘弹起时（这个面板
+    // 几乎总是带键盘打开）标题 + 两个选项 + 「应用」会超出可视区——真机表现就是
+    // 「单选点不动」，其实是那一行已经落在面板可视范围之外。放开高度 + 面板内部
+    // 自己让开键盘（见 [_SearchModeSheet]），点得到才算修好。
+    isScrollControlled: true,
+    builder: (_) => _SearchModeSheet(
+      current: current,
+      sources: sources
+          .where(
+            (source) =>
+                source.enabled &&
+                PrivacySettings.instance.allowsSource(source.id, source.name),
+          )
+          .toList(),
+      sourceIds: sourceIds,
+      sitesOnly: sitesOnly,
+    ),
+  );
+}
+
+class _SearchModeSheet extends StatefulWidget {
+  const _SearchModeSheet({
+    required this.current,
+    required this.sources,
+    required this.sourceIds,
+    required this.sitesOnly,
+  });
+
+  final SearchMode current;
+  final List<SourceDescriptor> sources;
+  final Set<String>? sourceIds;
+  final bool sitesOnly;
+
+  @override
+  State<_SearchModeSheet> createState() => _SearchModeSheetState();
+}
+
+class _SearchModeSheetState extends State<_SearchModeSheet> {
+  late SearchMode _picked = widget.current;
+  late final Set<String> _selected = widget.sources
+      .where(
+        (source) =>
+            widget.sourceIds == null || widget.sourceIds!.contains(source.id),
+      )
+      .map((source) => source.id)
+      .toSet();
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+      child: Material(
+        color: LumeTheme.base,
+        child: SafeArea(
+          top: false,
+          // 让开键盘：这个面板常在搜索框（autofocus）已经弹起键盘时打开。
+          child: Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(context).bottom,
+            ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(context).height * 0.7,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 14, 20, 6),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        widget.sitesOnly ? '搜索站点' : '搜索范围',
+                        style: TextStyle(
+                          fontSize: LumeTypography.titleSize,
+                          fontWeight: FontWeight.w600,
+                          color: LumeTheme.textPrimary,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: <Widget>[
+                        if (!widget.sitesOnly)
+                          for (final mode in SearchMode.values)
+                            ListTile(
+                              dense: true,
+                              selected: mode == _picked,
+                              leading: LumeIcon(
+                                mode == _picked
+                                    ? Icons.check_circle
+                                    : Icons.circle_outlined,
+                                slot: 'section_toolbar.3',
+                                variant: true,
+                                size: 20,
+                                color: mode == _picked
+                                    ? LumeTheme.accent
+                                    : LumeTheme.muted,
+                              ),
+                              title: Text(
+                                mode.label,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: LumeTheme.textPrimary,
+                                ),
+                              ),
+                              subtitle: Text(
+                                mode.detail,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: LumeTypography.descriptionSize,
+                                  color: LumeTheme.descriptionColor,
+                                ),
+                              ),
+                              // 点行只改选中态（圆点当场移动），不关面板。
+                              onTap: () => setState(() => _picked = mode),
+                            ),
+                        if (_picked == SearchMode.aggregate) ...[
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    '已选 ${_selected.length}/${widget.sources.length} 个站点',
+                                  ),
+                                ),
+                                TextButton(
+                                  onPressed: () => setState(
+                                    () => _selected.addAll(
+                                      widget.sources.map((source) => source.id),
+                                    ),
+                                  ),
+                                  child: const Text('全选'),
+                                ),
+                                TextButton(
+                                  onPressed: () => setState(_selected.clear),
+                                  child: const Text('清空'),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (widget.sources.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.all(16),
+                              child: Text('暂无已启用站点，请先在源管理中启用站点'),
+                            ),
+                          for (final source in widget.sources)
+                            CheckboxListTile(
+                              key: ValueKey('search-site-${source.id}'),
+                              dense: true,
+                              controlAffinity: ListTileControlAffinity.leading,
+                              title: Text(source.name),
+                              value: _selected.contains(source.id),
+                              onChanged: (value) => setState(() {
+                                if (value == true) {
+                                  _selected.add(source.id);
+                                } else {
+                                  _selected.remove(source.id);
+                                }
+                              }),
+                            ),
+                        ],
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed:
+                            _picked == SearchMode.aggregate && _selected.isEmpty
+                            ? null
+                            : () => Navigator.of(context).pop(
+                                SearchScopeSelection(
+                                  _picked,
+                                  _selected.length == widget.sources.length
+                                      ? null
+                                      : Set<String>.of(_selected),
+                                ),
+                              ),
+                        child: const Text('应用'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}

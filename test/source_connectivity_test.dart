@@ -1,0 +1,469 @@
+import 'package:lume_box/features/source/source_picker_sheet.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+import 'package:lume_box/core/session/section.dart';
+import 'package:lume_box/core/source/source.dart';
+import 'package:lume_box/core/theme/lume_theme.dart';
+import 'package:lume_box/features/source/global_source_page.dart';
+import 'package:lume_box/features/source/source_section_page.dart';
+
+import 'support/fake_source_manager.dart';
+
+/// 图源「测试连通性」与「更新订阅源」（文档 Phase1 图源管理 UI 要求：测试图源、
+/// 更新订阅源；第 4 条要求图源总管理支持批量操作）。
+///
+/// 连通性：单源三态（可用 / 无内容 / 不可用）由**模态弹窗**展示（名称 / 状态 /
+/// 耗时 / 日志，手动关闭、不自动消失），结论同时留在列表行上；批量测试只测
+/// 已启用的源并给出汇总；测试不改变图源状态（只读）。
+/// 订阅更新：只有订阅导入的图源可更新、四种结论各自的提示、批量刷新、失败不吞。
+void main() {
+  const video = Section.video;
+
+  FakeSourceManager managerWith({
+    List<SourceDescriptor> extra = const <SourceDescriptor>[],
+    Map<String, SourceTestResult>? results,
+  }) {
+    final manager = FakeSourceManager(
+      sources: <SourceDescriptor>[
+        const SourceDescriptor(
+          id: 'demo-1',
+          name: '示例源',
+          version: '1.0.0',
+          enabled: true,
+        ),
+        ...extra,
+      ],
+      opened: <String, DataSource>{
+        'demo-1': const MockDataSource(section: video),
+      },
+    );
+    if (results != null) manager.testResults.addAll(results);
+    return manager;
+  }
+
+  Future<void> pumpManager(
+    WidgetTester tester,
+    FakeSourceManager manager,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: LumeTheme.build(),
+        home: SourceSectionPage(section: video, manager: manager),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> openMoreMenu(WidgetTester tester, {bool last = false}) async {
+    final page = tester.widget<SourceSectionPage>(
+      find.byType(SourceSectionPage),
+    );
+    final manager = page.manager! as FakeSourceManager;
+    showSourcePicker(
+      context: tester.element(find.byType(SourceSectionPage)),
+      section: video,
+      sources: manager.sources,
+      currentId: null,
+      manager: manager,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(
+        ValueKey(
+          'picker-more-${(last ? manager.sources.last : manager.sources.first).id}',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('单源测试：模态弹窗展示名称 / 状态 / 耗时 / 日志，且不自动消失', (tester) async {
+    final manager = managerWith(
+      results: <String, SourceTestResult>{
+        'demo-1': const SourceTestResult.ok(
+          itemCount: 12,
+          categoryCount: 3,
+          elapsed: Duration(milliseconds: 850),
+        ),
+      },
+    );
+    await pumpManager(tester, manager);
+
+    await openMoreMenu(tester);
+    await tester.tap(find.text('测试连通性'));
+    await tester.pumpAndSettle();
+
+    expect(manager.testedIds, <String>['demo-1']);
+    final dialog = find.byType(AlertDialog);
+    expect(dialog, findsOneWidget);
+    expect(
+      find.descendant(of: dialog, matching: find.text('示例源')),
+      findsOneWidget,
+      reason: '源名称',
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.text('可用')),
+      findsOneWidget,
+      reason: '状态',
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.textContaining('0.8s')),
+      findsOneWidget,
+      reason: '耗时',
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.textContaining('12 条')),
+      findsOneWidget,
+      reason: '简短日志',
+    );
+
+    // 模态且不自动消失：等过 SnackBar 的 4 秒仍在，直到点「关闭」。
+    await tester.pump(const Duration(seconds: 10));
+    expect(dialog, findsOneWidget);
+
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    expect(find.byType(AlertDialog), findsNothing);
+    // 结论同时留在列表行上（关掉弹窗也不丢）。
+    expect(find.text('可用'), findsOneWidget, reason: '行内标记');
+  });
+
+  testWidgets('单源测试：脚本能跑但没内容时区分「无内容」', (tester) async {
+    final manager = managerWith(
+      results: <String, SourceTestResult>{
+        'demo-1': const SourceTestResult.empty(
+          elapsed: Duration(milliseconds: 400),
+          message: '脚本能运行，但首屏没有返回任何条目（源可能已改版）',
+        ),
+      },
+    );
+    await pumpManager(tester, manager);
+
+    await openMoreMenu(tester);
+    await tester.tap(find.text('测试连通性'));
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(AlertDialog);
+    expect(
+      find.descendant(of: dialog, matching: find.text('无内容')),
+      findsOneWidget,
+      reason: '状态：与「不可用」分开',
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.textContaining('源可能已改版')),
+      findsOneWidget,
+      reason: '日志带上原因',
+    );
+
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    expect(find.text('无内容'), findsOneWidget, reason: '行内标记');
+  });
+
+  testWidgets('单源测试：打不开时给可读原因', (tester) async {
+    final manager = managerWith(
+      results: <String, SourceTestResult>{
+        'demo-1': const SourceTestResult.failed('网络异常：连接超时'),
+      },
+    );
+    await pumpManager(tester, manager);
+
+    await openMoreMenu(tester);
+    await tester.tap(find.text('测试连通性'));
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(AlertDialog);
+    expect(
+      find.descendant(of: dialog, matching: find.text('不可用')),
+      findsOneWidget,
+      reason: '状态',
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.text('网络异常：连接超时')),
+      findsOneWidget,
+      reason: '简短日志',
+    );
+    expect(
+      find.descendant(of: dialog, matching: find.text('—')),
+      findsOneWidget,
+      reason: '失败拿不到耗时时如实占位，不编造',
+    );
+
+    await tester.tap(find.text('关闭'));
+    await tester.pumpAndSettle();
+    expect(find.text('不可用'), findsOneWidget, reason: '行内标记');
+  });
+
+  testWidgets('窄屏：弹窗内容自动换行，长名称与长日志不撑破弹窗', (tester) async {
+    final manager = FakeSourceManager(
+      sources: const <SourceDescriptor>[
+        SourceDescriptor(
+          id: 'demo-1',
+          name: '一个名字相当长的图源',
+          version: '1.0.0',
+          enabled: true,
+        ),
+      ],
+    );
+    manager.testResults.addAll(<String, SourceTestResult>{
+      'demo-1': const SourceTestResult.failed(
+        '打开失败：这是一个刻意写长的失败原因，用来验证窄屏下日志行换行而不是把弹窗撑破。',
+      ),
+    });
+
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: LumeTheme.build(),
+        home: SourceSectionPage(section: video, manager: manager),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await openMoreMenu(tester);
+    await tester.tap(find.text('测试连通性'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(AlertDialog), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('一个名字相当长的图源'),
+      ),
+      findsOneWidget,
+      reason: '长名称在弹窗里完整展示（列表行里也有一份）',
+    );
+    expect(
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.textContaining('刻意写长'),
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('批量测试：只测已启用的源，给出汇总', (tester) async {
+    final manager = managerWith(
+      extra: const <SourceDescriptor>[
+        SourceDescriptor(
+          id: 'demo-2',
+          name: '停用源',
+          version: '1.0.0',
+          enabled: false,
+        ),
+      ],
+      results: <String, SourceTestResult>{
+        'demo-1': const SourceTestResult.ok(
+          itemCount: 5,
+          categoryCount: 1,
+          elapsed: Duration(milliseconds: 300),
+        ),
+      },
+    );
+    await pumpManager(tester, manager);
+
+    await tester.tap(find.byTooltip('批量测试连通性'));
+    await tester.pumpAndSettle();
+
+    expect(manager.testedIds, <String>[
+      'demo-1',
+    ], reason: '停用的源跳过（测试会如实报「已停用」，没意义）');
+    expect(find.textContaining('测试完成：可用 1'), findsOneWidget);
+  });
+
+  testWidgets('批量测试：混合结论的汇总把三类分开', (tester) async {
+    final manager = FakeSourceManager(
+      sources: const <SourceDescriptor>[
+        SourceDescriptor(id: 'a', name: '好源', version: '1', enabled: true),
+        SourceDescriptor(id: 'b', name: '空源', version: '1', enabled: true),
+        SourceDescriptor(id: 'c', name: '坏源', version: '1', enabled: true),
+      ],
+    );
+    manager.testResults.addAll(<String, SourceTestResult>{
+      'a': const SourceTestResult.ok(
+        itemCount: 3,
+        categoryCount: 0,
+        elapsed: Duration(milliseconds: 100),
+      ),
+      'b': const SourceTestResult.empty(
+        elapsed: Duration(milliseconds: 100),
+        message: '首屏为空',
+      ),
+      'c': const SourceTestResult.failed('脚本载入失败'),
+    });
+    await pumpManager(tester, manager);
+
+    await tester.tap(find.byTooltip('批量测试连通性'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('可用 1 · 无内容 1 · 不可用 1'), findsOneWidget);
+  });
+
+  testWidgets('测试是只读的：不改图源状态与当前选择', (tester) async {
+    final manager = managerWith();
+    await pumpManager(tester, manager);
+
+    await openMoreMenu(tester);
+    await tester.tap(find.text('测试连通性'));
+    await tester.pumpAndSettle();
+
+    expect(manager.toggled, isEmpty, reason: '测试不得改启停');
+    expect(manager.removed, isEmpty);
+    expect(manager.renamed, isEmpty);
+    expect(manager.selectedIds, isEmpty, reason: '测试不得改当前源');
+    expect(manager.sources.single.enabled, isTrue);
+  });
+
+  testWidgets('图源总管理：批量测试跨四个板块', (tester) async {
+    // 总管理页每个板块各造一个管理器，验证它按板块逐个测。
+    final managers = <Section, FakeSourceManager>{
+      for (final section in Section.values)
+        section: FakeSourceManager(
+          sources: <SourceDescriptor>[
+            SourceDescriptor(
+              id: 'src-${section.id}',
+              name: '${section.label}源',
+              version: '1.0.0',
+              enabled: true,
+            ),
+          ],
+        ),
+    };
+
+    await tester.binding.setSurfaceSize(const Size(900, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: LumeTheme.build(),
+        home: GlobalSourcePage(managerFactory: (section) => managers[section]!),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('批量测试连通性'));
+    await tester.pumpAndSettle();
+
+    for (final section in Section.values) {
+      expect(managers[section]!.testedIds, <String>[
+        'src-${section.id}',
+      ], reason: '${section.label} 板块的源应当被测到');
+    }
+    expect(find.textContaining('测试完成（3 个）'), findsOneWidget);
+  });
+
+  group('更新订阅源', () {
+    FakeSourceManager subscribedManager({
+      Map<String, SourceUpdateResult>? results,
+    }) {
+      final manager = FakeSourceManager(
+        sources: const <SourceDescriptor>[
+          SourceDescriptor(
+            id: 'sub-1',
+            name: '订阅源',
+            version: '1.0.0',
+            enabled: true,
+            originUrl: 'https://example.com/sub.js',
+          ),
+          SourceDescriptor(
+            id: 'local-1',
+            name: '本地源',
+            version: '1.0.0',
+            enabled: true,
+          ),
+        ],
+      );
+      if (results != null) manager.updateResults.addAll(results);
+      return manager;
+    }
+
+    testWidgets('订阅源：行内标「订阅」，「更新订阅源」可用', (tester) async {
+      final manager = subscribedManager(
+        results: <String, SourceUpdateResult>{
+          'sub-1': const SourceUpdateResult.updated(
+            SourceDescriptor(
+              id: 'sub-1',
+              name: '订阅源',
+              version: '2.0.0',
+              enabled: true,
+            ),
+          ),
+        },
+      );
+      await pumpManager(tester, manager);
+
+      expect(find.text('订阅'), findsOneWidget, reason: '只有订阅导入的源带这个标记');
+
+      await openMoreMenu(tester);
+      await tester.tap(find.text('更新订阅源'));
+      await tester.pumpAndSettle();
+
+      expect(manager.updatedIds, <String>['sub-1']);
+      expect(find.textContaining('已更新：'), findsOneWidget);
+    });
+
+    testWidgets('本地导入的源：菜单项置灰，点了不会去更新', (tester) async {
+      final manager = subscribedManager();
+      await pumpManager(tester, manager);
+
+      // 第二条是本地源，打开它的菜单。
+      await openMoreMenu(tester, last: true);
+
+      // 置灰的菜单项在 Flutter 里渲染为禁用色；点它不会触发回调。
+      await tester.tap(find.text('更新订阅源'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(manager.updatedIds, isEmpty, reason: '本地源没有订阅地址，点了也不该去更新');
+      // 菜单仍然开着（禁用项不关闭菜单）。
+      expect(find.text('更新订阅源'), findsOneWidget);
+    });
+
+    testWidgets('已是最新：如实说「已是最新」，不谎报更新', (tester) async {
+      final manager = subscribedManager(
+        results: <String, SourceUpdateResult>{
+          'sub-1': const SourceUpdateResult.unchanged(
+            SourceDescriptor(
+              id: 'sub-1',
+              name: '订阅源',
+              version: '1.0.0',
+              enabled: true,
+            ),
+          ),
+        },
+      );
+      await pumpManager(tester, manager);
+
+      await openMoreMenu(tester);
+      await tester.tap(find.text('更新订阅源'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('已是最新'), findsOneWidget);
+    });
+
+    testWidgets('更新失败：透出原因（MD5 不符 / 网络异常）', (tester) async {
+      final manager = subscribedManager(
+        results: <String, SourceUpdateResult>{
+          'sub-1': const SourceUpdateResult.failed(
+            '订阅拉取失败：MD5 校验不一致（清单 abc，实际 def）',
+          ),
+        },
+      );
+      await pumpManager(tester, manager);
+
+      await openMoreMenu(tester);
+      await tester.tap(find.text('更新订阅源'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('更新失败'), findsOneWidget);
+      expect(find.textContaining('MD5 校验不一致'), findsOneWidget);
+    });
+
+    testWidgets('没有订阅源时：不显示批量刷新入口', (tester) async {
+      final manager = managerWith();
+      await pumpManager(tester, manager);
+      expect(find.byTooltip('刷新全部订阅源'), findsNothing);
+    });
+  });
+}

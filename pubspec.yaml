@@ -1,0 +1,153 @@
+name: lume_box
+description: "Lume Box"
+# The following line prevents the package from being accidentally published to
+# pub.dev using `flutter pub publish`. This is preferred for private packages.
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+
+# The following defines the version and build number for your application.
+# A version number is three numbers separated by dots, like 1.2.43
+# followed by an optional build number separated by a +.
+# Both the version and the builder number may be overridden in flutter
+# build by specifying --build-name and --build-number, respectively.
+# In Android, build-name is used as versionName while build-number used as versionCode.
+# Read more about Android versioning at https://developer.android.com/studio/publish/versioning
+# In iOS, build-name is used as CFBundleShortVersionString while build-number is used as CFBundleVersion.
+# Read more about iOS versioning at
+# https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
+# In Windows, build-name is used as the major, minor, and patch parts
+# of the product and file versions while build-number is used as the build suffix.
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.13.4
+
+# Dependencies specify other packages that your package needs in order to work.
+# To automatically upgrade your package dependencies to the latest versions
+# consider running `flutter pub upgrade --major-versions`. Alternatively,
+# dependencies can be manually updated by changing the version numbers below to
+# the latest version available on pub.dev. To see which dependencies have newer
+# versions available, run `flutter pub outdated`.
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # The following adds the Cupertino Icons font to your application.
+  # Use with the CupertinoIcons class for iOS style icons.
+  cupertino_icons: ^1.0.8
+  # 本地 vendored 副本（路径依赖）：上游 0.1.6 + 一处安全补丁
+  # （导出 JS_SetInterruptHandler，见 third_party/quickjs_engine/PATCHES.md）。
+  # 用路径依赖而不是 pub 版本，是为了让「死循环指令计数超时销毁」这条安全能力
+  # 真正生效——上游构建把该符号设为 hidden，中断通路不可用。
+  quickjs_engine:
+    path: third_party/quickjs_engine
+  sqlite3: ^3.7.0
+  image: ^4.10.1
+  http: ^1.6.0
+  html: ^0.15.7
+  path_provider: ^2.1.6
+  path: ^1.9.1
+  ffi: ^2.2.0
+  video_player: ^2.14.1
+  # 本地导入图源脚本：从文件系统挑选 .js 文件（iOS 走系统文档选择器）。
+  file_selector: ^1.1.0
+  # 「设置 → 关于」里显示版本与构建号（CI 每个构建一个号）；装的是哪一版要能一眼看到。
+  package_info_plus: ^10.2.2
+  # 内置 WebView（用户要求的「网页视图」）：图源被 Cloudflare/WAF 拦下时，
+  # 在 App 内打开源站让用户手动过真人校验，再把会话 Cookie 取回来复用。
+  # iOS 走 WKWebView（webview_flutter_wkwebview，随插件自动带上）。
+  webview_flutter_wkwebview: ^3.27.0
+  webview_flutter: ^4.13.0
+  media_kit: ^1.2.6
+  media_kit_video: ^2.0.1
+  media_kit_libs_ios_video: ^1.1.4
+  media_kit_libs_android_video: ^1.3.8
+  media_kit_libs_windows_video: ^1.0.11
+  fvp: ^0.39.0
+  # Current source additions since the archived manifest (2026-10-08).
+  archive: ^4.3.0
+  audio_session: ^0.2.4
+  crypto: ^3.0.7
+  http_parser: ^4.1.2
+  just_audio: ^0.10.6
+  just_audio_background: 0.0.1-beta.17
+  pointycastle: ^4.0.0
+  sherpa_onnx: ^1.13.8
+  tflite_flutter: ^0.12.1
+  # flutter_svg 的编译器目前支持到 xml 7.0.1；朗读 SSML 与图标解析共用。
+  xml: 7.0.1
+  lume_cat_node:
+    path: third_party/lume_cat_node
+  cupertino_http: 3.1.0
+  palette_generator: 0.3.3+7
+  flutter_svg: ^2.3.2
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+
+  # The "flutter_lints" package below contains a set of recommended lints to
+  # encourage good coding practices. The lint set provided by the package is
+  # activated in the `analysis_options.yaml` file located at the root of your
+  # package. See that file for information about deactivating specific lint
+  # rules and activating additional ones.
+  flutter_lints: ^6.0.0
+
+  # 图标生成工具（只在本地生成 iOS 图标资源，不参与运行时）。
+  flutter_launcher_icons: ^0.14.1
+
+  # 测试替身用它的类型（假 video_player 平台，验请求头 / 缓冲参数到达平台层）。
+  video_player_platform_interface: ^6.9.0
+  # WebView 页面生命周期与退出停止播放的测试替身。
+  webview_flutter_platform_interface: ^2.15.1
+
+# 本地 vendored 副本（路径覆盖）：上游 2.12.0 + 一处补丁
+# （把宿主写入的播放缓冲参数应用到 AVPlayer，见
+# third_party/video_player_avfoundation/PATCHES.md）。
+# 为什么必须覆盖：真机反馈的「拿到地址后要等 1–2 分钟才出画面」里，
+# AVPlayer 的 preferredForwardBufferDuration / automaticallyWaitsToMinimizeStalling
+# 只存在于原生对象上，而插件不把 AVPlayer 暴露给宿主——只有在插件内部创建播放器
+# 的那一刻才能装上；宿主没配置过时补丁什么都不做（与上游行为一致）。
+dependency_overrides:
+  # Keep pure audio playback separate from video and comic speech ownership.
+  audio_service:
+    path: third_party/audio_service_ownership
+  video_player_avfoundation:
+    path: third_party/video_player_avfoundation
+
+flutter:
+  uses-material-design: true
+  shaders:
+    - assets/shaders/dock_liquid_lens.frag
+    - assets/shaders/dock_liquid_surface.frag
+    - assets/shaders/comic_page_filters.frag
+    - assets/shaders/comic_glass.frag
+  assets:
+    - assets/source_icons/
+    - assets/branding/
+    - assets/rex/lumebox_demo.js
+    - assets/reference/
+    - assets/js/
+    - assets/cat/
+    - assets/local_danmaku/
+    - assets/icon/
+    - assets/models/waifu2x/
+    - assets/models/intro/mobileclip_s0_image.zip
+    - assets/models/intro/anchor_vectors.json
+    - assets/models/intro/yamnet.tflite
+    - assets/models/intro/prompts.json
+    - assets/models/intro/compact_checksums.json
+    - assets/models/intro/MobileCLIP-LICENSE.txt
+    - assets/models/intro/MobileCLIP-LICENSE_MODELS.txt
+    - assets/models/intro/MobileCLIP-ACKNOWLEDGEMENTS.txt
+    - assets/models/intro/YAMNet-LICENSE.txt
+    - assets/speech/vits_aishell3/manifest.json
+    - assets/speech/vits_aishell3/runtime/
+
+# 图标生成配置：只生成 iOS 图标；remove_alpha_ios 强制抹除 Alpha 通道
+# （iOS 图标不接受透明通道，实色底才能通过系统图标校验）。
+flutter_launcher_icons:
+  android: false
+  ios: true
+  remove_alpha_ios: true
+  image_path_ios: "assets/icon/app_icon_1024.png"

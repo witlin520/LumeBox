@@ -1,0 +1,23 @@
+name: Check Python sources (no IPA)
+on:
+  workflow_dispatch:
+
+jobs:
+  python-sources:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.47.5
+          channel: stable
+          cache: true
+      - name: Prepare pinned Python runtime
+        run: python3 tool/prepare_python_runtime.py
+      - name: Python host tests
+        run: |
+          python3 tool/prepare_python_runtime.py --packages-only --output .cache/python-source-runtime
+          python3 tool/test_python_sources.py
+      - name: Compile native bridge and run iOS Simulator smoke test
+        run: bash tool/check_ios_python.sh

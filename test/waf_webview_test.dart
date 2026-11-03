@@ -1,0 +1,183 @@
+import 'dart:io';
+
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:lume_box/core/net/waf.dart';
+import 'package:lume_box/core/reading/reading.dart';
+import 'package:lume_box/core/session/section.dart';
+import 'package:lume_box/core/session/section_scope.dart';
+
+/// 内置网页视图的**识别与会话**两半（用户要求的那套 Cloudflare 流程）。
+///
+/// WebView 本身是平台视图，跑不进 `flutter test`；这里守它两边最要紧的性质：
+///   1. 只对**明确的 WAF 指纹**启用（普通 403 不许把用户引去网页视图）；
+///   2. 会话按**图源**分开存、同名覆盖、可合并进请求头（cf_clearance 那枚必须带上）。
+void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late Directory root;
+
+  setUp(() async {
+    root = Directory.systemTemp.createTempSync('lume_box_waf');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+      const MethodChannel('plugins.flutter.io/path_provider'),
+      (call) async => call.method == 'getApplicationSupportDirectory'
+          ? root.path
+          : null,
+    );
+    WafSessions.resetForTesting();
+    await SectionScope.open(Section.comic);
+    await ReadingLibrary.open(Section.comic);
+  });
+
+  tearDown(() async {
+    WafSessions.resetForTesting();
+    ReadingLibrary.disposeAll();
+    ReadingStore.disposeAll();
+    await SectionScope.closeAll();
+    if (root.existsSync()) root.deleteSync(recursive: true);
+  });
+
+  group('识别：只认明确的 WAF 指纹', () {
+    test('Cloudflare 挑战页的响应头 / 页面特征都算', () {
+      expect(
+        WafDetector.isChallenge(
+          statusCode: 403,
+          headers: const <String, String>{'cf-mitigated': 'challenge'},
+        ),
+        isTrue,
+      );
+      expect(
+        WafDetector.isChallenge(
+          statusCode: 503,
+          body: '<html><title>Just a moment...</title>',
+        ),
+        isTrue,
+      );
+      expect(
+        WafDetector.isChallenge(
+          statusCode: 403,
+          body: '<script src="/cdn-cgi/challenge-platform/x"></script>',
+        ),
+        isTrue,
+      );
+    });
+
+    test('普通 403 / 防盗链不算（不许把用户引去网页视图）', () {
+      expect(
+        WafDetector.isChallenge(
+          statusCode: 403,
+          headers: const <String, String>{'server': 'nginx'},
+          body: '<html>Forbidden</html>',
+        ),
+        isFalse,
+        reason: '403 也可能是防盗链或权限问题，判据必须是 WAF 指纹而不是状态码',
+      );
+      expect(WafDetector.isChallenge(statusCode: 404, body: 'not found'), isFalse);
+      expect(WafDetector.isChallenge(statusCode: 200, body: 'ok'), isFalse);
+    });
+
+    test('脚本抛出的失败文案也能认出来（页面据此显示【网页视图】）', () {
+      expect(looksLikeWafFailure('拉取失败：HTTP 403 just a moment'), isTrue);
+      expect(looksLikeWafFailure('安全验证 security check'), isTrue);
+      expect(looksLikeWafFailure('拉取失败：HTTP 404'), isFalse);
+      expect(looksLikeWafFailure(null), isFalse);
+    });
+  });
+
+  group('两类防护的差异化判定（用户口径 2.1 / 2.2）', () {
+    test('脚本标记 NEED_WEBVIEW_VERIFY → 走网页视图', () {
+      expect(
+        wafKindOf('NEED_WEBVIEW_VERIFY：站点触发了 Cloudflare 人机校验（HTTP 403）'),
+        WafFailureKind.webView,
+      );
+    });
+
+    test('脚本标记 WAF_RECAPTCHA_V3 → 走外部桥接（不给网页视图按钮）', () {
+      expect(
+        wafKindOf('WAF_RECAPTCHA_V3：金牌影院启用了 reCAPTCHA v3 WAF（HTTP 521）'),
+        WafFailureKind.bridge,
+        reason: '这类源没有可复用 Cookie，网页视图对它无效',
+      );
+      expect(
+        wafKindOf('WAF_RECAPTCHA_V3：请求被站点的 reCAPTCHA v3 WAF 拦截（waf_captcha_marker）'),
+        WafFailureKind.bridge,
+      );
+    });
+
+    test('没有标记时按指纹兜底；普通失败既不是 webView 也不是 bridge', () {
+      expect(
+        wafKindOf('拉取失败：HTTP 503 Just a moment...'),
+        WafFailureKind.webView,
+        reason: '老源没升级标记，WAF 指纹要能兜住',
+      );
+      expect(wafKindOf('拉取失败：HTTP 404'), isNull);
+      expect(wafKindOf(null), isNull);
+    });
+
+    test('桥接提示文案点名出路（含「桥接服务地址」）', () {
+      expect(wafBridgeHint, contains('外部无头浏览器桥接服务'));
+      expect(wafBridgeHint, contains('桥接服务地址'));
+    });
+  });
+
+  group('会话：按图源存、同名覆盖、可合并进请求头', () {
+    test('阅读库关闭重开后会话查询换用新句柄', () async {
+      WafSessions.save(Section.comic, 'mh92_comic', {'cf_clearance': 'saved'});
+      final before = WafSessions.storeOf(Section.comic);
+      ReadingLibrary.disposeAll();
+      ReadingStore.disposeAll();
+      expect(WafSessions.storeOf(Section.comic), isNull);
+      await ReadingLibrary.open(Section.comic);
+      expect(identical(before, WafSessions.storeOf(Section.comic)), isFalse);
+      expect(WafSessions.cookiesFor(Section.comic, 'mh92_comic'), 'cf_clearance=saved');
+    });
+    test('保存后能读回；同名覆盖、新的追加', () {
+      final store = WafSessions.storeOf(Section.comic)!;
+      store.save('92mh', <String, String>{
+        'cf_clearance': 'old',
+        'other': '1',
+      });
+      expect(store.cookieHeader('92mh'), 'cf_clearance=old; other=1');
+
+      store.save('92mh', <String, String>{'cf_clearance': 'new'});
+      final header = store.cookieHeader('92mh')!;
+      expect(header, contains('cf_clearance=new'));
+      expect(header, isNot(contains('old')), reason: '刷新过的凭证要盖掉旧的');
+      expect(header, contains('other=1'), reason: '没提到的保留');
+      expect(store.countOf('92mh'), 2);
+    });
+
+    test('按图源隔离：另一个源看不到它的会话', () {
+      final store = WafSessions.storeOf(Section.comic)!;
+      store.save('a-source', <String, String>{'cf_clearance': 'a'});
+      expect(store.cookieHeader('b-source'), isNull);
+    });
+
+    test('合并进请求头：脚本自带 > 会话 > 图源配置（去重）', () {
+      final merged = mergeCookieHeader(
+        existing: 'foo=1',
+        wafCookies: 'cf_clearance=abc; foo=2',
+      );
+      expect(merged, contains('cf_clearance=abc'));
+      expect(merged, contains('foo=2'), reason: '会话是最新过校验的那一份，优先');
+      expect(merged, isNot(contains('foo=1')));
+
+      expect(mergeCookieHeader(existing: null, wafCookies: 'a=1'), 'a=1');
+      expect(mergeCookieHeader(existing: 'a=1', wafCookies: null), 'a=1');
+      expect(mergeCookieHeader(existing: null, wafCookies: null), isNull);
+    });
+
+    test('库没打开时如实返回「没有会话」（不会顺手开库）', () {
+      WafSessions.resetForTesting();
+      ReadingLibrary.close(Section.comic);
+      expect(
+        WafSessions.storeOf(Section.comic),
+        isNull,
+        reason: '库没打开就没有会话可读——不顺手把库打开',
+      );
+      expect(WafSessions.cookiesFor(Section.comic, '92mh'), isNull);
+    });
+  });
+}
