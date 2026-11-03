@@ -78,7 +78,6 @@ final class AetherPlayerController: NSObject, FlutterPlatformViewFactory {
             options.attemptsHDRMasterOnUnprovenPanel = hdr
             options.dolbyVisionHandling = dv ? .automatic : .baseLayerOnly
             options.forwardBufferSegments = updated.forwardBufferSegments
-            options.sessionCacheByteBudget = updated.sessionCacheByteBudget
             options.preferredDecodePath = updated.preferredDecodePath
           }
         }
@@ -148,7 +147,6 @@ private final class AetherSession: NSObject, FlutterStreamHandler {
     engine.backgroundPlaybackEnabled = true
     // LumeBox owns lock-screen actions via PlaybackSessionController.
     engine.ownsVideoNowPlayingSession = false
-    engine.ownsSoftwareNowPlaying = false
   }
 
   func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink) -> FlutterError? {
@@ -188,7 +186,6 @@ private final class AetherSession: NSObject, FlutterStreamHandler {
     if language != "source" && language != "off" { result.preferredSubtitleLanguages = [language] }
     let seconds = options["forwardBufferSeconds"] as? Double ?? 15
     result.forwardBufferSegments = max(1, Int(ceil(seconds / 2)))
-    result.sessionCacheByteBudget = options["maxBufferBytes"] as? Int ?? 64 * 1024 * 1024
     return result
   }
 
