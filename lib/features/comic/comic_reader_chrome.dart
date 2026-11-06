@@ -578,7 +578,6 @@ extension _ComicReaderChrome on _ComicReaderPageState {
   String _menuTitle(String route) =>
       const {
         'main': '阅读工具',
-        'voices': '声音',
         'direction': '阅读方向',
         'reading': '阅读模式',
         'background': '背景',
@@ -598,8 +597,6 @@ extension _ComicReaderChrome on _ComicReaderPageState {
     void Function(VoidCallback) close,
   ) {
     switch (route) {
-      case 'voices':
-        return [_voiceMenu(close)];
       case 'direction':
         return [
           for (final item in <(String, String, IconData)>[

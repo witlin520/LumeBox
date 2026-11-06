@@ -9,7 +9,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:lume_box/core/media/media_library.dart';
-import 'package:lume_box/core/reading/comic_image_tools.dart';
 import 'package:lume_box/core/reading/reading.dart';
 import 'package:lume_box/core/session/app_preferences.dart';
 import 'package:lume_box/core/session/privacy_settings.dart';
@@ -39,7 +38,6 @@ Future<void> main() async {
   await ShellSettingsController.instance.boot();
   await FloatingModules.instance.boot();
   await FrostedSettings.instance.boot();
-  await ComicImageToolsSettings.instance.boot();
   final source = await _LocalComicSource.create();
   final library = await ReadingLibrary.open(Section.comic);
   runApp(_PreviewApp(source: source, library: library));

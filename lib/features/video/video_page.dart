@@ -146,7 +146,7 @@ class _VideoPageState extends State<VideoPage> {
           memoryBudgetBytes: SectionImagePipeline.thumbnailBudgetBytes,
           // 封面网格按封面并发（4）跑：并发太大被图床限流，反而更多空白。
           maxConcurrent: SectionImagePipeline.coverConcurrency,
-          decodeTransform: (bytes) => bytes,
+          decodeTransform: (bytes) => Future.value(bytes),
         );
       });
     } catch (error, stackTrace) {

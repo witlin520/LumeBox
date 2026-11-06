@@ -106,7 +106,7 @@ class _ReadingHistorySheetState extends State<ReadingHistorySheet> {
     cacheDir: widget.library.imageCacheDir,
     memoryBudgetBytes: SectionImagePipeline.thumbnailBudgetBytes,
     diskCache: SectionImagePipeline.diskCacheFor(widget.section),
-    decodeTransform: (bytes) => bytes,
+    decodeTransform: (bytes) => Future.value(bytes),
   );
   @override
   void dispose() {

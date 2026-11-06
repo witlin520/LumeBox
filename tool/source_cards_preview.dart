@@ -1,8 +1,6 @@
 // Local UI preview. Uses the production source selection panels.
 import 'package:flutter/material.dart';
 import 'package:lume_box/core/reading/reading.dart';
-import 'package:lume_box/core/reading/comic_image_tools_settings.dart';
-import 'package:lume_box/features/comic/comic_image_tools_page.dart';
 import 'package:lume_box/features/source/source_preferences_page.dart';
 import 'package:lume_box/core/session/section.dart';
 import 'package:lume_box/core/source/source.dart';
@@ -153,7 +151,6 @@ Future<void> main() async {
     await ReadingLibrary.open(section);
   }
   await TmdbSettings.instance.boot();
-  await ComicImageToolsSettings.instance.boot();
   runApp(
     MaterialApp(
       debugShowCheckedModeBanner: false,
@@ -203,15 +200,6 @@ class _PreviewState extends State<Preview> {
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(builder: (_) => const TmdbSettingsPage()),
-          ),
-        ),
-        ListTile(
-          title: const Text('AI 图片超分与上色'),
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const ComicImageToolsSettingsPage(),
-            ),
           ),
         ),
         ListTile(

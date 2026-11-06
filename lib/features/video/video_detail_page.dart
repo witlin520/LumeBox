@@ -152,14 +152,14 @@ class _VideoDetailPageState extends State<VideoDetailPage>
       widget.imagePipeline ??
       SectionImagePipeline(
         cacheDir: widget.library.imageCacheDir,
-        decodeTransform: (bytes) => bytes,
+        decodeTransform: (bytes) => Future.value(bytes),
       );
   // TMDB 图片按自己的代理地址获取，不继承源站 Cookie/代理配置。
   late final tmdbImagePipeline = SectionImagePipeline(
     cacheDir: '${widget.library.imageCacheDir}/tmdb',
     memoryBudgetBytes: SectionImagePipeline.thumbnailBudgetBytes,
     cacheOriginalBytes: true,
-    decodeTransform: (bytes) => bytes,
+    decodeTransform: (bytes) => Future.value(bytes),
   );
   @override
   void initState() {

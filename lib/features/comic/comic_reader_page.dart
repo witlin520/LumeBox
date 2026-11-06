@@ -13,9 +13,13 @@ import '../source/waf_webview_page.dart';
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+
+import 'package:file_selector/file_selector.dart'
+    show XFile, getSaveLocation;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart' show Ticker;
@@ -56,6 +60,26 @@ import 'comic_shader_artwork.dart';
 import 'comic_glass_backdrop.dart';
 import '../settings/log_report.dart';
 import '../settings/log_report_page.dart';
+
+/// 把手动处理结果交给系统保存 / 分享。
+///
+/// iOS 走已有的 configuration 通道（系统分享单，可存照片或文件）；其它平台
+/// 用文件保存对话框。超分/上色结果都是 PNG。
+Future<bool> exportProcessedImage(Uint8List bytes, String name) async {
+  if (!Platform.isIOS) {
+    final location = await getSaveLocation(suggestedName: name);
+    if (location == null) return false;
+    await XFile.fromData(
+      bytes,
+      mimeType: 'image/png',
+      name: name,
+    ).saveTo(location.path);
+    return true;
+  }
+  return await const MethodChannel('lumebox/configuration')
+          .invokeMethod<bool>('share', {'bytes': bytes, 'name': name}) ??
+      false;
+}
 
 part 'comic_reader_chrome.dart';
 part 'comic_reader_menu.dart';
@@ -770,7 +794,6 @@ class _ComicReaderPageState extends State<ComicReaderPage>
   Future<void> _openReaderSettings() async {
     _stopAutoScroll();
     unawaited(_volumeKeys.configure(false));
-    await _imageModelReady;
     if (!mounted) return;
     await Navigator.of(context).push(
       MaterialPageRoute<void>(

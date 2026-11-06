@@ -212,8 +212,6 @@ class _ReaderMenuLayerState extends State<_ReaderMenuLayer> {
                   switch (widget.route) {
                     'flags' => Icons.flag_outlined,
                     'bookmarks' => Icons.bookmark_border,
-                    'voices' => Icons.record_voice_over_outlined,
-                    'translation' => Icons.translate,
                     'reading' => Icons.vertical_align_bottom,
                     'zones' => Icons.touch_app_outlined,
                     _ => Icons.tune,

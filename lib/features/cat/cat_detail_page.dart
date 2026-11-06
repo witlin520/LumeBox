@@ -57,14 +57,14 @@ class _CatDetailPageState extends State<CatDetailPage>
     cacheDir: widget.library.imageCacheDir,
     memoryBudgetBytes: SectionImagePipeline.thumbnailBudgetBytes,
     maxConcurrent: SectionImagePipeline.coverConcurrency,
-    decodeTransform: (bytes) => bytes,
+    decodeTransform: (bytes) => Future.value(bytes),
   );
   late final tmdb = TmdbDetailController(widget.item.title);
   late final tmdbImagePipeline = SectionImagePipeline(
     cacheDir: '${widget.library.imageCacheDir}/tmdb',
     memoryBudgetBytes: SectionImagePipeline.thumbnailBudgetBytes,
     cacheOriginalBytes: true,
-    decodeTransform: (bytes) => bytes,
+    decodeTransform: (bytes) => Future.value(bytes),
   );
   SourceDetail? detail;
   List<SourceChapter> chapters = [];

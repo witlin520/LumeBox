@@ -222,7 +222,7 @@ class _CatPageState extends State<CatPage>
         cacheDir: library!.imageCacheDir,
         memoryBudgetBytes: SectionImagePipeline.thumbnailBudgetBytes,
         maxConcurrent: SectionImagePipeline.coverConcurrency,
-        decodeTransform: (bytes) => bytes,
+        decodeTransform: (bytes) => Future.value(bytes),
       );
       await service.checkUpdates();
       final requested = widget.requestedSite;

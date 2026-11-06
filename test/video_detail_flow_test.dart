@@ -203,7 +203,7 @@ void main() {
   });
 
   for (final compact in [false, true]) {
-    testWidgets('下载图标紧邻翻译，点击直接选集：compact=$compact', (tester) async {
+    testWidgets('下载图标可见，点击直接选集：compact=$compact', (tester) async {
       await tester.binding.setSurfaceSize(const Size(320, 900));
       addTearDown(() => tester.binding.setSurfaceSize(null));
       await tester.pumpWidget(
@@ -223,16 +223,7 @@ void main() {
       final download = find.byKey(const Key('video-detail-download'));
       await tester.ensureVisible(download);
       await tester.pumpAndSettle();
-      final translation = find.byKey(const Key('video-detail-translation'));
-      expect(
-        tester.getCenter(download).dx,
-        greaterThan(tester.getCenter(translation).dx),
-      );
-      expect(
-        (tester.getCenter(download).dy - tester.getCenter(translation).dy)
-            .abs(),
-        lessThan(1),
-      );
+      expect(download, findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.tap(download);
       await tester.pumpAndSettle();
