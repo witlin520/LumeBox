@@ -61,6 +61,10 @@ import 'comic_glass_backdrop.dart';
 import '../settings/log_report.dart';
 import '../settings/log_report_page.dart';
 
+part 'comic_reader_chrome.dart';
+part 'comic_reader_menu.dart';
+part 'comic_reader_surface.dart';
+
 /// 把手动处理结果交给系统保存 / 分享。
 ///
 /// iOS 走已有的 configuration 通道（系统分享单，可存照片或文件）；其它平台
@@ -80,10 +84,6 @@ Future<bool> exportProcessedImage(Uint8List bytes, String name) async {
           .invokeMethod<bool>('share', {'bytes': bytes, 'name': name}) ??
       false;
 }
-
-part 'comic_reader_chrome.dart';
-part 'comic_reader_menu.dart';
-part 'comic_reader_surface.dart';
 
 /// 全屏漫画阅读器：连续滚动、方向翻页与双页阅读，共用章节和进度底座。
 ///
