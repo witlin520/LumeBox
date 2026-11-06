@@ -182,7 +182,7 @@ final class OfflineVideoRemuxer: @unchecked Sendable {
     var source: UnsafeMutablePointer<AVFormatContext>?
     var destination: UnsafeMutablePointer<AVFormatContext>?
     var options: OpaquePointer?
-    av_dict_set(&options, "protocol_whitelist", "file,data", 0)
+    av_dict_set(&options, "protocol_whitelist", "file,crypto,data", 0)
     av_dict_set(&options, "allowed_extensions", "ALL", 0)
     av_dict_set(&options, "extension_picky", "0", 0)
     defer { av_dict_free(&options); avformat_close_input(&source) }
