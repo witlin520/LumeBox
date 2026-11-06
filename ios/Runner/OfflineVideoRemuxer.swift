@@ -182,9 +182,13 @@ final class OfflineVideoRemuxer: @unchecked Sendable {
     var source: UnsafeMutablePointer<AVFormatContext>?
     var destination: UnsafeMutablePointer<AVFormatContext>?
     var options: OpaquePointer?
-    av_dict_set(&options, "protocol_whitelist", "file,crypto,data", 0)
+    // The bundled FFmpeg has no 'crypto' protocol (CONFIG_CRYPTO_PROTOCOL is off), so
+    // AES-128 is pre-decrypted by CommonCrypto into plain .ts and the playlist is rewritten
+    // with METHOD=NONE. Whitelist only file/data. Drop 'extension_picky': it is a private
+    // HLS option some builds reject (EINVAL), and 'allowed_extensions ALL' already covers
+    // unusual segment extensions.
+    av_dict_set(&options, "protocol_whitelist", "file,data", 0)
     av_dict_set(&options, "allowed_extensions", "ALL", 0)
-    av_dict_set(&options, "extension_picky", "0", 0)
     defer { av_dict_free(&options); avformat_close_input(&source) }
     // Force the HLS demuxer first; some sources only open after FFmpeg auto-detects
     // the format, so fall back to format probing before giving up.
@@ -194,8 +198,9 @@ final class OfflineVideoRemuxer: @unchecked Sendable {
       code = avformat_open_input(&source, input.path, nil, &options)
     }
     // A pre-decrypted/rewritten playlist can be rejected even though the original
-    // segments are fine (e.g. our AES IV handling is off for a given source). The
-    // bundled demuxer can decrypt AES-128 itself, so retry on the pristine list.
+    // segments are fine (e.g. our AES IV handling is off for a given source). Retry
+    // on the pristine list as a last resort — it only helps for unencrypted sources,
+    // since this FFmpeg build has no 'crypto' protocol and cannot decrypt AES-128.
     if code < 0, input.path != fallback.path {
       avformat_close_input(&source)
       code = avformat_open_input(&source, fallback.path, av_find_input_format("hls"), &options)
@@ -229,7 +234,6 @@ final class OfflineVideoRemuxer: @unchecked Sendable {
     guard code >= 0 else { throw failure("无法写入 MP4，请检查剩余空间", code) }
     var muxOptions: OpaquePointer?
     av_dict_set(&muxOptions, "movflags", "+faststart", 0)
-    av_dict_set(&muxOptions, "avoid_negative_ts", "make_zero", 0)
     defer { av_dict_free(&muxOptions) }
     code = avformat_write_header(target, &muxOptions)
     guard code >= 0 else { throw failure("该编码无法无损封装为 MP4，分片已保留", code) }
