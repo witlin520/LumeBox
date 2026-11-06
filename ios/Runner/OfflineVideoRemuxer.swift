@@ -186,8 +186,16 @@ final class OfflineVideoRemuxer: @unchecked Sendable {
     av_dict_set(&options, "allowed_extensions", "ALL", 0)
     av_dict_set(&options, "extension_picky", "0", 0)
     defer { av_dict_free(&options); avformat_close_input(&source) }
+    // Force the HLS demuxer first; some sources only open after FFmpeg auto-detects
+    // the format, so fall back to format probing before giving up.
     var code = avformat_open_input(&source, input.path, av_find_input_format("hls"), &options)
-    guard code >= 0, let context = source else { throw failure("无法打开离线分片", code) }
+    if code < 0 {
+      avformat_close_input(&source)
+      code = avformat_open_input(&source, input.path, nil, &options)
+    }
+    guard code >= 0, let context = source else {
+      throw failure("无法打开离线分片（\(input.lastPathComponent)）", code)
+    }
     code = avformat_find_stream_info(context, nil)
     guard code >= 0 else { throw failure("无法读取视频轨道", code) }
     code = avformat_alloc_output_context2(&destination, nil, "mp4", output.path)
