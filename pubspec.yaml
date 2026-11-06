@@ -80,6 +80,10 @@ dependencies:
   cupertino_http: 3.1.0
   palette_generator: 0.3.3+7
   flutter_svg: ^2.3.2
+  # 备份合并通路：ffmpeg_kit_flutter_new 内置完整 FFmpeg 8.1.2（含 crypto 协议），
+  # 可对 AES-128 HLS 直接「流拷贝」合并成 MP4，绕开 Aether 库缺 mp4 muxer / crypto 的限制。
+  # iOS 走 Flutter Swift Package 集成（项目已启用 SPM，pub get 自动加进生成的插件包）。
+  ffmpeg_kit_flutter_new: ^4.6.8
 dev_dependencies:
   flutter_test:
     sdk: flutter

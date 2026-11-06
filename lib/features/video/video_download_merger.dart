@@ -1,21 +1,23 @@
 import 'dart:io';
 
-import 'package:flutter/services.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_session.dart';
+import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import 'package:path/path.dart' as p;
 
 /// Stream-copy remuxing: no re-encoding and no media bytes on the method channel.
+///
+/// iOS 用内嵌的 FFmpeg（ffmpeg_kit_flutter_new，含 crypto 协议）直接合并 AES-128
+/// HLS。原生 Aether 库缺 mp4/mov muxer，已废弃。桌面仍用系统 ffmpeg。
 class VideoDownloadMerger {
-  static const channel = MethodChannel('lumebox/video_remux');
   final _processes = <String, Process>{};
+  final _ffmpegSessions = <String, FFmpegSession>{};
   final _cancelled = <String>{};
 
   Future<void> merge(Directory directory, File output, String id) async {
     _cancelled.remove(id);
     if (Platform.isIOS) {
-      await channel.invokeMethod<void>('merge', {
-        'directory': directory.absolute.path,
-        'id': id,
-      });
+      await _mergeIOS(directory, output, id);
       return;
     }
     if (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux) {
@@ -65,12 +67,55 @@ class VideoDownloadMerger {
     }
   }
 
+  /// iOS 合并：使用内嵌 FFmpeg（ffmpeg_kit_flutter_new，含 crypto 协议）直接合并 AES-128
+  /// HLS。原生 Aether 库缺 mp4/mov muxer，已完全废弃，不再回退。
+  Future<void> _mergeIOS(Directory directory, File output, String id) async {
+    final args = [
+      '-hide_banner',
+      '-loglevel',
+      'error',
+      '-nostdin',
+      '-y',
+      '-protocol_whitelist',
+      'file,crypto,data',
+      '-allowed_extensions',
+      'ALL',
+      '-i',
+      p.join(directory.path, 'index.m3u8'),
+      '-map',
+      '0:v:0',
+      '-map',
+      '0:a?',
+      '-c',
+      'copy',
+      '-avoid_negative_ts',
+      'make_zero',
+      '-movflags',
+      '+faststart',
+      '-f',
+      'mp4',
+      output.path,
+    ].join(' ');
+    final session = await FFmpegKit.execute(args);
+    _ffmpegSessions[id] = session;
+    final rc = await session.getReturnCode();
+    _ffmpegSessions.remove(id);
+    if (ReturnCode.isSuccess(rc)) return;
+    if (_cancelled.contains(id)) throw StateError('合并已暂停');
+    final logs = (await session.getAllLogsAsString())?.trim() ?? '';
+    throw StateError('MP4 合并失败，原始分片已保留（${rc?.getValue() ?? '?'}）${logs.isNotEmpty ? '：$logs' : ''}');
+  }
+
   Future<void> cancel(String id) async {
     if (Platform.isIOS) {
-      await channel.invokeMethod<void>('cancel', {'id': id});
-    } else {
       _cancelled.add(id);
-      _processes[id]?.kill();
+      final session = _ffmpegSessions.remove(id);
+      if (session != null) {
+        await FFmpegKit.cancel(session.getSessionId());
+      }
+      return;
     }
+    _cancelled.add(id);
+    _processes[id]?.kill();
   }
 }
