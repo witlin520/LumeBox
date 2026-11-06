@@ -213,7 +213,15 @@ final class OfflineVideoRemuxer: @unchecked Sendable {
     }
     code = avformat_find_stream_info(context, nil)
     guard code >= 0 else { throw failure("无法读取视频轨道", code) }
-    code = avformat_alloc_output_context2(&destination, nil, "mp4", output.path)
+    // Resolve the muxer explicitly instead of relying on the 'mp4' format-name lookup,
+    // which FFmpeg 8.1/Aether rejects with AVERROR(EINVAL) (-22). mp4 and mov are both
+    // ISO BMFF (playback-compatible); the target filename ends in '.part', so extension
+    // based guessing cannot find 'mp4' either.
+    var outputFormat = av_guess_format("mp4", nil, nil)
+    if outputFormat == nil { outputFormat = av_guess_format("mov", nil, nil) }
+    if outputFormat == nil { outputFormat = av_guess_format(nil, output.path, nil) }
+    guard let format = outputFormat else { throw failure("当前 FFmpeg 库不支持 MP4 封装") }
+    code = avformat_alloc_output_context2(&destination, format, nil, output.path)
     guard code >= 0, let target = destination else { throw failure("无法创建 MP4", code) }
     defer { avio_closep(&target.pointee.pb); avformat_free_context(target) }
     var mapping = [Int32: Int32](), counts = [Int32: Int]()
