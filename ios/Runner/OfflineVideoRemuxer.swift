@@ -126,7 +126,7 @@ final class OfflineVideoRemuxer: @unchecked Sendable {
           // explicit IV mis-rejects fMP4 streams that rely on the implicit sequence IV.
           destination = try decrypt(source, key: key, iv: iv(explicitIV, sequence: sequence), workspace: workspace)
         }
-        result = line.replacingOccurrences(of: "URI=\"\(ref)\"", with: "URI=\"\(destination.absoluteString)\"")
+        result = line.replacingOccurrences(of: "URI=\"\(ref)\"", with: "URI=\"\(destination.path)\"")
       } else if !line.isEmpty && !line.hasPrefix("#") {
         let source = try local(line, relativeTo: playlist, root: root)
         let destination: URL
@@ -135,7 +135,10 @@ final class OfflineVideoRemuxer: @unchecked Sendable {
         } else if let key = key {
           destination = try decrypt(source, key: key, iv: iv(explicitIV, sequence: sequence), workspace: workspace)
         } else { destination = source }
-        result = destination.absoluteString
+        // Use the filesystem path, not URL.absoluteString: FFmpeg's HLS demuxer cannot
+        // open a 'file:///' segment URI and fails with AVERROR_INVALIDDATA when it tries
+        // to load the first segment, which makes avformat_open_input reject the playlist.
+        result = destination.path
         guard sequence < UInt64.max else { throw failure("分片序号溢出") }
         sequence += 1
       }
