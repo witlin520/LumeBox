@@ -122,7 +122,8 @@ final class OfflineVideoRemuxer: @unchecked Sendable {
         if source.pathExtension == "m3u8" {
           destination = try prepare(source, root: root, workspace: workspace, depth: depth + 1)
         } else if line.hasPrefix("#EXT-X-MAP:"), let key = key {
-          guard explicitIV != nil else { throw failure("加密初始化片段缺少 IV") }
+          // HLS spec: with no explicit IV the Media-SEQUENCE is the IV. Requiring an
+          // explicit IV mis-rejects fMP4 streams that rely on the implicit sequence IV.
           destination = try decrypt(source, key: key, iv: iv(explicitIV, sequence: sequence), workspace: workspace)
         }
         result = line.replacingOccurrences(of: "URI=\"\(ref)\"", with: "URI=\"\(destination.absoluteString)\"")
@@ -290,7 +291,13 @@ final class OfflineVideoMergeController {
             jobs.removeValue(forKey: id); result(nil)
           } catch {
             jobs.removeValue(forKey: id)
-            result(FlutterError(code: "merge", message: error is CancellationError ? "合并已暂停" : error.localizedDescription, details: nil))
+            // Surface the raw FFmpeg error code (e.g. -22 EINVAL, -1094995529 INVALIDDATA)
+            // so the Dart side can show exactly why the remuxer failed.
+            let ns = error as NSError
+            result(FlutterError(
+              code: "merge",
+              message: error is CancellationError ? "合并已暂停" : ns.localizedDescription,
+              details: error is CancellationError ? nil : ns.code))
           }
         }
       }
