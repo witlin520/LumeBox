@@ -25,10 +25,10 @@ final class OfflineVideoRemuxer: @unchecked Sendable {
     if fm.fileExists(atPath: workspace.path) { try fm.removeItem(at: workspace) }
     try fm.createDirectory(at: workspace, withIntermediateDirectories: true)
     defer { try? fm.removeItem(at: workspace) }
-    let input = try prepare(root.appendingPathComponent("index.m3u8"), root: root,
-                            workspace: workspace, depth: 0)
+    let sourceList = root.appendingPathComponent("index.m3u8")
+    let input = try prepare(sourceList, root: root, workspace: workspace, depth: 0)
     do {
-      try copyPackets(input: input, output: output)
+      try copyPackets(input: input, fallback: sourceList, output: output)
       try check()
       try validate(output)
     } catch {
@@ -178,7 +178,7 @@ final class OfflineVideoRemuxer: @unchecked Sendable {
     return destination
   }
 
-  private func copyPackets(input: URL, output: URL) throws {
+  private func copyPackets(input: URL, fallback: URL, output: URL) throws {
     var source: UnsafeMutablePointer<AVFormatContext>?
     var destination: UnsafeMutablePointer<AVFormatContext>?
     var options: OpaquePointer?
@@ -192,6 +192,13 @@ final class OfflineVideoRemuxer: @unchecked Sendable {
     if code < 0 {
       avformat_close_input(&source)
       code = avformat_open_input(&source, input.path, nil, &options)
+    }
+    // A pre-decrypted/rewritten playlist can be rejected even though the original
+    // segments are fine (e.g. our AES IV handling is off for a given source). The
+    // bundled demuxer can decrypt AES-128 itself, so retry on the pristine list.
+    if code < 0, input.path != fallback.path {
+      avformat_close_input(&source)
+      code = avformat_open_input(&source, fallback.path, av_find_input_format("hls"), &options)
     }
     guard code >= 0, let context = source else {
       throw failure("无法打开离线分片（\(input.lastPathComponent)）", code)
