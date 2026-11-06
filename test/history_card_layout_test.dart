@@ -1,7 +1,5 @@
 import 'dart:io';
 
-import 'package:lume_box/core/reading/comic_image_tools.dart';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -91,45 +89,6 @@ void main() {
     for (final removed in <String>['双列网格', '四列网格', '五列网格']) {
       expect(find.text(removed), findsNothing, reason: '「$removed」应已砍掉');
     }
-  });
-
-  testWidgets('视频历史海报只跟随视频范围开关，漫画范围不会误处理视频', (tester) async {
-    final settings = ComicImageToolsSettings.instance;
-    final previous = (
-      settings.automatic,
-      settings.upscaleCovers,
-      settings.upscaleVideoPosters,
-    );
-    ComicImageTools.debugAutomaticSupported = true;
-    var calls = 0;
-    final messenger =
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-    messenger.setMockMethodCallHandler(ComicImageTools.channel, (call) async {
-      if (call.method == 'superResolve') {
-        calls++;
-        return (call.arguments as Map)['bytes'];
-      }
-      return null;
-    });
-    addTearDown(() {
-      settings.automatic = previous.$1;
-      settings.upscaleCovers = previous.$2;
-      settings.upscaleVideoPosters = previous.$3;
-      ComicImageTools.debugAutomaticSupported = null;
-      messenger.setMockMethodCallHandler(ComicImageTools.channel, null);
-    });
-    settings.automatic = true;
-    settings.upscaleCovers = true;
-    settings.upscaleVideoPosters = false;
-    await pumpMode(tester, 'grid3');
-    final cover = tester.widget<CoverThumb>(find.byType(CoverThumb));
-    final bytes = Uint8List.fromList([1, 2, 3]);
-    await cover.pipeline!.decodeTransform!(bytes);
-    expect(calls, 0);
-    settings.upscaleCovers = false;
-    settings.upscaleVideoPosters = true;
-    await cover.pipeline!.decodeTransform!(bytes);
-    expect(calls, 1);
   });
 
   testWidgets('三列网格：无白边、封面四角圆角、标题单行、进度不带集数', (tester) async {

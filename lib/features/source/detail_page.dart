@@ -1,4 +1,3 @@
-import '../../shared/widgets/source_translation.dart';
 
 import 'package:flutter/material.dart';
 
@@ -90,13 +89,7 @@ class _DetailPageState extends State<DetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                SourceTranslationAction(
-                  texts: [
-                    detail?.title ?? widget.item.title,
-                    if (detail?.description != null) detail!.description!,
-                  ],
-                ),
-                SourceText(
+                Text(
                   detail?.title ?? widget.item.title,
                   style: TextStyle(
                     fontSize: LumeTypography.pageTitleSize,
@@ -117,7 +110,7 @@ class _DetailPageState extends State<DetailPage> {
                 ],
                 if (detail?.description != null) ...<Widget>[
                   const SizedBox(height: 10),
-                  SourceText(
+                  Text(
                     detail!.description!,
                     style: TextStyle(
                       fontWeight: FontWeight.w600,

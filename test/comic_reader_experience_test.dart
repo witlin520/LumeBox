@@ -9,15 +9,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lume_box/core/reading/comic_image_tools.dart';
 import 'package:lume_box/core/reading/reading.dart';
 import 'package:lume_box/core/session/section.dart';
-import 'package:lume_box/core/speech/speech_channel.dart';
-import 'package:lume_box/core/speech/speech_session.dart';
-import 'package:lume_box/core/speech/speech_settings.dart';
-import 'package:lume_box/features/comic/comic_speech_text.dart';
 import 'package:lume_box/features/comic/comic_bookmarks.dart';
-import 'package:lume_box/features/comic/comic_page_composition.dart';
 import 'package:lume_box/core/session/section_scope.dart';
 import 'package:lume_box/core/source/source.dart';
 import 'package:lume_box/features/comic/comic_page_filters.dart';
@@ -26,112 +20,6 @@ import 'package:lume_box/features/comic/comic_reader_preferences.dart';
 import 'package:lume_box/features/comic/comic_settings.dart';
 
 import 'support/fake_reading_source.dart';
-
-class _TranslationTools extends ComicImageTools {
-  final pending = Completer<List<ComicTextRegion>>();
-  @override
-  Future<List<ComicTextRegion>> translate(Uint8List bytes) => pending.future;
-}
-
-class _CountingTranslationTools extends ComicImageTools {
-  int calls = 0;
-  @override
-  Future<List<ComicTextRegion>> translate(Uint8List bytes) async {
-    calls++;
-    return const [
-      ComicTextRegion(
-        text: 'Text',
-        translation: '译文',
-        x: .1,
-        y: .2,
-        width: .5,
-        height: .08,
-      ),
-    ];
-  }
-}
-
-class _ServerTranslationTools extends ComicImageTools {
-  _ServerTranslationTools()
-    : super(settings: ComicImageToolsSettings()..serverTranslation = true);
-  int serverCalls = 0;
-  @override
-  Future<Uint8List> translateImageOnServer(Uint8List bytes) async {
-    serverCalls++;
-    return bytes;
-  }
-
-  @override
-  Future<List<ComicTextRegion>> translate(Uint8List bytes) async =>
-      throw StateError('Server mode must bypass local OCR');
-}
-
-class _EmptyTranslationTools extends ComicImageTools {
-  @override
-  Future<List<ComicTextRegion>> translate(Uint8List bytes) async => [];
-}
-
-class _SpeechProbe extends MethodChannelSpeechBackend {
-  final controller = StreamController<SpeechEvent>.broadcast();
-  final spoken = <({String text, double rate, String voice})>[];
-  SpeechSettings applied = const SpeechSettings();
-  int stops = 0;
-  @override
-  void applySettings(SpeechSettings settings) {
-    applied = settings;
-  }
-
-  @override
-  Future<bool> isSupported() async => true;
-  @override
-  Stream<SpeechEvent> get events => controller.stream;
-  void emit(SpeechEvent event) {
-    if (!controller.isClosed) controller.add(event);
-  }
-
-  @override
-  Future<void> speak(String text) async {
-    spoken.add((text: text, rate: applied.rate, voice: applied.narratorVoice));
-    emit(const SpeechEvent(SpeechEventKind.started));
-  }
-
-  @override
-  Future<void> stop() async {
-    stops++;
-    emit(const SpeechEvent(SpeechEventKind.stopped));
-  }
-
-  @override
-  Future<void> pause() async => emit(const SpeechEvent(SpeechEventKind.paused));
-  @override
-  Future<void> resume() async =>
-      emit(const SpeechEvent(SpeechEventKind.resumed));
-}
-
-class _SpeechTools extends ComicImageTools {
-  Completer<List<ComicTextRegion>>? pending;
-  static const regions = [
-    ComicTextRegion(
-      text: '第一句文字',
-      translation: '',
-      x: .1,
-      y: .2,
-      width: .5,
-      height: .08,
-    ),
-    ComicTextRegion(
-      text: '第二句文字',
-      translation: '',
-      x: .1,
-      y: .5,
-      width: .5,
-      height: .08,
-    ),
-  ];
-  @override
-  Future<List<ComicTextRegion>> recognizeRegions(Uint8List bytes) async =>
-      pending == null ? regions : pending!.future;
-}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -260,8 +148,6 @@ void main() {
   Future<void> pumpReader(
     WidgetTester tester, {
     Size size = const Size(420, 880),
-    ComicImageTools? tools,
-    SpeechBackend? speech,
     bool dark = false,
     String title = '山间来信',
     String chapterTitle = '第一章 · 午后的风',
@@ -319,8 +205,6 @@ void main() {
             runtimeAvailable: runtimeAvailable,
             pageBytes: pageLoader ?? (_) async => page,
             imageExporter: exporter,
-            imageTools: tools,
-            speechBackend: speech,
           ),
         ),
       ),
@@ -360,26 +244,6 @@ void main() {
       ),
     );
     await tester.tap(activeText(text));
-    await settle(tester);
-  }
-
-  Future<void> startSpeech(
-    WidgetTester tester,
-    _SpeechProbe speech,
-    _SpeechTools tools, {
-    Size size = const Size(420, 880),
-  }) async {
-    await pumpReader(tester, speech: speech, tools: tools, size: size);
-    await menu(tester, '朗读');
-    await tester.scrollUntilVisible(
-      find.text('朗读本页'),
-      100,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await settle(tester);
-    await tester.tap(find.text('朗读本页'));
-    await settle(tester);
-    Navigator.of(tester.element(find.byType(BottomSheet).last)).pop();
     await settle(tester);
   }
 
@@ -637,122 +501,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('整页服务器模式从阅读器调用服务器而不是本地OCR', (tester) async {
-    final tools = _ServerTranslationTools();
-    await pumpReader(tester, tools: tools, imageCount: 1);
-    await menu(tester, '翻译');
-    await selectMenuItem(tester, '当前页');
-    expect(tools.serverCalls, 1);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('全局实时翻译开启后漫画无需手动开启', (tester) async {
-    final settings = ComicImageToolsSettings.instance;
-    settings.liveTranslation = true;
-    addTearDown(() => settings.liveTranslation = false);
-    final tools = _CountingTranslationTools();
-    await pumpReader(tester, tools: tools, imageCount: 2);
-    await tester.pump(const Duration(milliseconds: 700));
-    await settle(tester);
-    expect(tools.calls, 1);
-    tester.widget<Slider>(find.byKey(const Key('comic.pageSlider'))).onChanged!(
-      1,
-    );
-    await tester.pump(const Duration(milliseconds: 700));
-    await settle(tester);
-    expect(tools.calls, 2);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('实时翻译当前页并在翻页后继续，关闭后停止', (tester) async {
-    final tools = _CountingTranslationTools();
-    await pumpReader(tester, tools: tools, imageCount: 3);
-    await menu(tester, '翻译');
-    await selectMenuItem(tester, '实时翻译');
-    expect(tools.calls, 1);
-    tester.widget<Slider>(find.byKey(const Key('comic.pageSlider'))).onChanged!(
-      1,
-    );
-    await settle(tester);
-    await tester.pump(const Duration(milliseconds: 700));
-    await settle(tester);
-    expect(tools.calls, 2);
-    await menu(tester, '翻译');
-    await selectMenuItem(tester, '关闭');
-    tester.widget<Slider>(find.byKey(const Key('comic.pageSlider'))).onChanged!(
-      2,
-    );
-    await settle(tester);
-    await tester.pump(const Duration(milliseconds: 700));
-    expect(tools.calls, 2);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('本系列翻译跨退出保存，关闭后不再自动启动', (tester) async {
-    final tools = _CountingTranslationTools();
-    await pumpReader(tester, tools: tools, imageCount: 2);
-    await menu(tester, '翻译');
-    await selectMenuItem(tester, '本系列');
-    expect(tools.calls, 2);
-    final annotations = jsonDecode(
-      library.setting('comic.annotations.fake-src.item-1')!,
-    );
-    expect(annotations['translation.scope'], 'series');
-    await tester.pumpWidget(const SizedBox.shrink());
-    await settle(tester);
-    final reopened = _CountingTranslationTools();
-    await pumpReader(tester, tools: reopened, imageCount: 2);
-    expect(reopened.calls, 2);
-    await menu(tester, '翻译');
-    await selectMenuItem(tester, '关闭');
-    expect(
-      jsonDecode(
-        library.setting('comic.annotations.fake-src.item-1')!,
-      )['translation.scope'],
-      'off',
-    );
-    await tester.pumpWidget(const SizedBox.shrink());
-    await settle(tester);
-    final disabled = _CountingTranslationTools();
-    await pumpReader(tester, tools: disabled, imageCount: 2);
-    expect(disabled.calls, 0);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('空 OCR 结果仍保留唯一翻译范围选中状态，当前页与本章独立', (tester) async {
-    await pumpReader(tester, tools: _EmptyTranslationTools(), imageCount: 1);
-    Future<void> check(String expected) async {
-      await menu(tester, '翻译');
-      for (final label in ['关闭', '当前页', '本章', '本系列']) {
-        final tile = tester.widget<ListTile>(
-          find.ancestor(of: activeText(label), matching: find.byType(ListTile)),
-        );
-        expect(
-          (tile.trailing is Icon ? (tile.trailing as Icon).icon : null) ==
-              Icons.check,
-          label == expected,
-          reason: label,
-        );
-      }
-    }
-
-    await menu(tester, '翻译');
-    await selectMenuItem(tester, '本系列');
-    await check('本系列');
-    await selectMenuItem(tester, '当前页');
-    await check('当前页');
-    await selectMenuItem(tester, '本章');
-    await check('本章');
-    await selectMenuItem(tester, '关闭');
-    for (final label in ['当前页', '本章', '本系列']) {
-      final tile = tester.widget<ListTile>(
-        find.ancestor(of: activeText(label), matching: find.byType(ListTile)),
-      );
-      expect(tile.trailing, isNull);
-    }
-    expect(tester.takeException(), isNull);
-  });
-
   testWidgets('长目录打开即定位当前章，倒序后仍定位且可跳章', (tester) async {
     final chapters = [
       for (var i = 0; i < 240; i++)
@@ -870,39 +618,6 @@ void main() {
     await settle(tester);
     await tester.pump(const Duration(milliseconds: 900));
     expect(library.comicProgress('item-1')!.page, 2);
-  });
-
-  testWidgets('换章后忽略旧章的异步翻译结果', (tester) async {
-    final tools = _TranslationTools();
-    await pumpReader(tester, tools: tools);
-    await menu(tester, '翻译');
-    await tester.tap(find.text('当前页'));
-    await settle(tester);
-    await tester.tap(find.byTooltip('下一章'));
-    await settle(tester);
-    tools.pending.complete(const [
-      ComicTextRegion(
-        text: 'old',
-        translation: '旧章翻译',
-        x: .1,
-        y: .1,
-        width: .3,
-        height: .1,
-      ),
-    ]);
-    await settle(tester);
-    expect(
-      tester
-          .widgetList<CustomPaint>(find.byType(CustomPaint))
-          .any(
-            (widget) =>
-                widget.painter is ComicTranslationPainter &&
-                (widget.painter as ComicTranslationPainter).regions.any(
-                  (region) => region.translation == '旧章翻译',
-                ),
-          ),
-      isFalse,
-    );
   });
 
   testWidgets('320 像素窄屏含全部工具按钮仍可操作', (tester) async {
@@ -1039,143 +754,6 @@ void main() {
     expect(find.byIcon(Icons.drag_handle), findsNothing);
   });
 
-  testWidgets('倍速真实下发且暂停切速不自行起播', (tester) async {
-    final speech = _SpeechProbe();
-    addTearDown(speech.controller.close);
-    await startSpeech(tester, speech, _SpeechTools());
-    expect(speech.spoken.single.rate, .5);
-    await tester.tap(find.byKey(const Key('comic.speech.speed')));
-    await settle(tester);
-    await capture(tester, 'speech-speed');
-    await tester.tap(find.text('1.5×'));
-    await settle(tester);
-    expect(speech.spoken.last.rate, .75);
-    expect(
-      SpeechSettings.decode(library.setting(SpeechSettings.settingKey)).rate,
-      .75,
-    );
-    await tester.tap(find.byTooltip('暂停朗读'));
-    await settle(tester);
-    final count = speech.spoken.length;
-    await tester.tap(find.byKey(const Key('comic.speech.speed')));
-    await settle(tester);
-    await tester.tap(find.text('0.75×'));
-    await settle(tester);
-    expect(speech.spoken.length, count);
-    expect(speech.applied.rate, .375);
-    await tester.tap(find.byTooltip('继续朗读'));
-    await settle(tester);
-    expect(speech.spoken.last.rate, .375);
-    await tester.tap(find.byTooltip('停止朗读'));
-    await settle(tester);
-  });
-
-  testWidgets('隐藏朗读栏保留语音，恢复后仍可暂停停止', (tester) async {
-    final speech = _SpeechProbe();
-    addTearDown(speech.controller.close);
-    await startSpeech(tester, speech, _SpeechTools());
-    final stops = speech.stops;
-    await tester.tap(find.byTooltip('隐藏朗读栏'));
-    await settle(tester);
-    expect(speech.stops, stops);
-    expect(find.byTooltip('暂停朗读'), findsNothing);
-    await tester.tap(find.byTooltip('显示朗读栏'));
-    await settle(tester);
-    expect(find.byTooltip('暂停朗读'), findsOneWidget);
-    await tester.tap(find.byTooltip('停止朗读'));
-    await settle(tester);
-    expect(speech.stops, greaterThan(stops));
-    expect(find.byTooltip('显示朗读栏'), findsNothing);
-    expect(find.byKey(const Key('comic.speech.highlight')), findsNothing);
-  });
-
-  testWidgets('语音进度同时更新文字与图片区域高亮，停止清除', (tester) async {
-    final speech = _SpeechProbe();
-    addTearDown(speech.controller.close);
-    await startSpeech(tester, speech, _SpeechTools());
-    speech.emit(const SpeechEvent(SpeechEventKind.progress, charOffset: 2));
-    await settle(tester);
-    TextSpan currentSpan() =>
-        (tester
-                        .widget<Text>(
-                          find.byKey(const Key('comic.speech.highlight')),
-                        )
-                        .textSpan
-                    as TextSpan)
-                .children![1]
-            as TextSpan;
-    expect(currentSpan().text, '句');
-    await capture(tester, 'speech-highlight');
-    final before = tester.getRect(
-      find.byKey(const ValueKey('comic.speech.region.0')),
-    );
-    speech.emit(const SpeechEvent(SpeechEventKind.progress, charOffset: 7));
-    await settle(tester);
-    expect(currentSpan().text, '二');
-    expect(
-      tester.getRect(find.byKey(const ValueKey('comic.speech.region.0'))).top,
-      greaterThan(before.top),
-    );
-    await tester.tap(find.byTooltip('停止朗读'));
-    await settle(tester);
-    expect(find.byKey(const ValueKey('comic.speech.region.0')), findsNothing);
-  });
-
-  testWidgets('音色快捷选择枚举系统声音并保存下发', (tester) async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-          const MethodChannel('lumebox/speech'),
-          (call) async => call.method == 'speechVoices'
-              ? [
-                  {'id': 'voice-a', 'name': 'Tingting', 'language': 'zh-CN'},
-                ]
-              : null,
-        );
-    addTearDown(
-      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(
-            const MethodChannel('lumebox/speech'),
-            null,
-          ),
-    );
-    final speech = _SpeechProbe();
-    addTearDown(speech.controller.close);
-    await startSpeech(tester, speech, _SpeechTools());
-    final voiceButton = tester.getRect(
-      find.byWidgetPredicate(
-        (widget) => widget is IconButton && widget.tooltip == '声音与朗读设置',
-      ),
-    );
-    await tester.tap(find.byTooltip('声音与朗读设置'));
-    await settle(tester);
-    expect(
-      find.byKey(const ValueKey('comic.menu.scroll.voices')),
-      findsOneWidget,
-    );
-    expect(find.byType(BottomSheet), findsNothing);
-    expect(
-      tester.getRect(find.byKey(const ValueKey('layer.voices'))).bottom,
-      closeTo(voiceButton.top - 8, 1),
-    );
-    await capture(tester, 'speech-voices');
-    expect(find.text('Tingting · zh-CN'), findsNothing);
-    await tester.tap(find.text('婷婷 · 普通话'));
-    await settle(tester);
-    expect(speech.spoken.last.voice, 'voice-a');
-    expect(
-      SpeechSettings.decode(library.setting(SpeechSettings.settingKey))
-          .narratorVoice,
-      'voice-a',
-    );
-    await tester.tap(find.byTooltip('声音与朗读设置'));
-    await settle(tester);
-    await tester.tap(find.text('自动'));
-    await settle(tester);
-    expect(speech.applied.narratorVoice, '');
-    await tester.tap(find.byTooltip('停止朗读'));
-    await settle(tester);
-  });
-
   testWidgets('开始阅读区域提示自动消失且不改常驻开关', (tester) async {
     (ComicReaderPreferences()
           ..tapZones = 'horizontal'
@@ -1204,47 +782,6 @@ void main() {
     expect(find.byKey(const Key('comic.tapZonesOverlay')), findsOneWidget);
   });
 
-  testWidgets('睡眠到时丢弃仍在进行的 OCR，不会迟到起播', (tester) async {
-    final speech = _SpeechProbe();
-    addTearDown(speech.controller.close);
-    final tools = _SpeechTools()..pending = Completer<List<ComicTextRegion>>();
-    await startSpeech(tester, speech, tools);
-    await menu(tester, '睡眠定时器');
-    await tester.tap(find.text('5 分钟'));
-    await settle(tester);
-    await tester.pump(const Duration(minutes: 5));
-    await settle(tester);
-    tools.pending!.complete(_SpeechTools.regions);
-    await settle(tester);
-    expect(speech.spoken, isEmpty);
-    expect(find.byKey(const Key('comic.speech.highlight')), findsNothing);
-  });
-
-  test('OCR 偏移映射保留行边界及 UTF-16 表情字符', () {
-    final page = ComicSpeechText(const [
-      ComicTextRegion(
-        text: ' 甲😀乙 ',
-        translation: '',
-        x: 0,
-        y: 0,
-        width: 1,
-        height: .1,
-      ),
-      ComicTextRegion(
-        text: '丙',
-        translation: '',
-        x: 0,
-        y: .5,
-        width: 1,
-        height: .1,
-      ),
-    ]);
-    expect(page.text, '甲😀乙\n丙');
-    final cursor = ComicSpeechCursor('url', page, 2);
-    expect(cursor.text.substring(cursor.start, cursor.end), '😀');
-    expect(ComicSpeechCursor('url', page, 5).line!.region.text, '丙');
-  });
-
   testWidgets('叠层菜单逐级返回，父层不可操作并保留滚动位置', (tester) async {
     await pumpReader(tester);
     await tester.tap(find.byTooltip('更多'));
@@ -1259,7 +796,7 @@ void main() {
           find.byKey(const ValueKey('comic.menu.scroll.main')),
         )
         .controller!;
-    await selectMenuItem(tester, '翻译');
+    await selectMenuItem(tester, '阅读模式');
     final previousOffset = scroll.offset;
     expect(previousOffset, greaterThan(0));
     final parent = find.byKey(const ValueKey('comic.menu.parent.main'));
@@ -1274,7 +811,7 @@ void main() {
           .ignoring,
       isTrue,
     );
-    await capture(tester, 'menu-translation-stack');
+    await capture(tester, 'menu-reading-stack');
     await tester.binding.handlePopRoute();
     await settle(tester);
     expect(parent, findsNothing);
@@ -1496,68 +1033,6 @@ void main() {
     );
   });
 
-  testWidgets('当前页译文进入分享图片，导出失败后可以重试', (tester) async {
-    final tools = _TranslationTools();
-    Uint8List? exported;
-    var fail = true;
-    await pumpReader(
-      tester,
-      tools: tools,
-      exporter: (bytes, name) async {
-        if (fail) throw StateError('测试导出失败');
-        exported = bytes;
-        return true;
-      },
-    );
-    await menu(tester, '翻译');
-    await selectMenuItem(tester, '当前页');
-    tools.pending.complete(const [
-      ComicTextRegion(
-        text: 'test',
-        translation: 'HELLO',
-        x: .6,
-        y: .7,
-        width: .3,
-        height: .12,
-      ),
-    ]);
-    await settle(tester);
-    expect(
-      tester
-          .widgetList<CustomPaint>(find.byType(CustomPaint))
-          .any(
-            (widget) =>
-                widget.painter is ComicTranslationPainter &&
-                (widget.painter as ComicTranslationPainter).regions.any(
-                  (r) => r.translation == 'HELLO',
-                ),
-          ),
-      isTrue,
-    );
-    await menu(tester, '分享页面');
-    expect(find.textContaining('测试导出失败'), findsOneWidget);
-    fail = false;
-    await menu(tester, '分享页面');
-    expect(exported, isNotNull);
-    await tester.runAsync(() async {
-      final codec = await ui.instantiateImageCodec(exported!);
-      final image = (await codec.getNextFrame()).image;
-      codec.dispose();
-      final pixels = (await image.toByteData())!.buffer.asUint8List();
-      final offset =
-          ((image.height * .7).round() + 4) * image.width * 4 +
-          ((image.width * .6).round() + 4) * 4;
-      expect(pixels[offset], greaterThan(240));
-      expect(pixels[offset + 1], greaterThan(240));
-      expect(pixels[offset + 2], greaterThan(240));
-      if (const bool.fromEnvironment('READER_PREVIEW')) {
-        File('build/reader-previews/share-translated-page.png')
-            .writeAsBytesSync(exported!);
-      }
-      image.dispose();
-    });
-  });
-
   testWidgets('分享进行中退出不会弹出系统分享或在已销毁页面更新状态', (tester) async {
     var gate = false, exports = 0;
     final pending = Completer<Uint8List?>();
@@ -1576,92 +1051,6 @@ void main() {
     await settle(tester);
     expect(exports, 0);
     expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('音色查询空列表可恢复自动且继续朗读', (tester) async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-          const MethodChannel('lumebox/speech'),
-          (call) async => call.method == 'speechVoices' ? [] : null,
-        );
-    addTearDown(
-      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(
-            const MethodChannel('lumebox/speech'),
-            null,
-          ),
-    );
-    library.setSetting(
-      SpeechSettings.settingKey,
-      const SpeechSettings(narratorVoice: 'missing-voice').encode(),
-    );
-    final speech = _SpeechProbe();
-    addTearDown(speech.controller.close);
-    await startSpeech(tester, speech, _SpeechTools());
-    await tester.tap(find.byTooltip('声音与朗读设置'));
-    await settle(tester);
-    expect(find.textContaining('暂不可用'), findsOneWidget);
-    await tester.tap(find.text('自动'));
-    await settle(tester);
-    expect(speech.applied.narratorVoice, '');
-    expect(speech.spoken.last.voice, '');
-    expect(find.byTooltip('暂停朗读'), findsOneWidget);
-    expect(find.byKey(const Key('comic.status.time')), findsOneWidget);
-    await tester.tap(find.byTooltip('停止朗读'));
-    await settle(tester);
-  });
-
-  testWidgets('长音色浮层贴近声音按钮，横屏和窄屏可滚动选末项', (tester) async {
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(
-          const MethodChannel('lumebox/speech'),
-          (call) async => call.method == 'speechVoices'
-              ? [
-                  for (var i = 0; i < 40; i++)
-                    {'id': 'voice-$i', 'name': '设备声音 $i', 'language': 'zh-CN'},
-                ]
-              : null,
-        );
-    addTearDown(
-      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-          .setMockMethodCallHandler(
-            const MethodChannel('lumebox/speech'),
-            null,
-          ),
-    );
-    for (final size in [const Size(760, 320), const Size(320, 620)]) {
-      final speech = _SpeechProbe();
-      addTearDown(speech.controller.close);
-      await startSpeech(tester, speech, _SpeechTools(), size: size);
-      expect(speech.spoken, isNotEmpty);
-      final button = tester.getRect(find.byTooltip('声音与朗读设置'));
-      await tester.tap(find.byTooltip('声音与朗读设置'));
-      await settle(tester);
-      final panel = tester.getRect(find.byKey(const ValueKey('layer.voices')));
-      expect(panel.top, greaterThanOrEqualTo(0));
-      expect(panel.bottom, lessThanOrEqualTo(button.top - 7));
-      expect(panel.left, greaterThanOrEqualTo(0));
-      expect(panel.right, lessThanOrEqualTo(size.width));
-      await tester.scrollUntilVisible(
-        find.text('设备声音 39 · 普通话'),
-        100,
-        scrollable: find.descendant(
-          of: find.byKey(const ValueKey('comic.menu.scroll.voices')),
-          matching: find.byType(Scrollable),
-        ),
-      );
-      await settle(tester);
-      await capture(
-        tester,
-        size.width > size.height ? 'voices-landscape' : 'voices-small',
-      );
-      await tester.tap(find.text('设备声音 39 · 普通话'));
-      await settle(tester);
-      expect(speech.applied.narratorVoice, 'voice-39');
-      await tester.pumpWidget(const SizedBox.shrink());
-      await settle(tester);
-      expect(tester.takeException(), isNull);
-    }
   });
 
   testWidgets('真实图片阅读器与菜单预览', (tester) async {

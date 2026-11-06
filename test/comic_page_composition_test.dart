@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:lume_box/core/reading/comic_image_tools.dart';
 import 'package:lume_box/features/comic/comic_page_composition.dart';
 import 'package:lume_box/features/comic/comic_page_filters.dart';
 import 'package:lume_box/features/comic/comic_reader_preferences.dart';
@@ -84,65 +83,6 @@ void main() {
       );
       output.dispose();
       filtered.dispose();
-      image.dispose();
-    });
-  });
-
-  testWidgets('分享含译文且半页外译文不泄漏，屏幕与导出共用译文绘制', (tester) async {
-    await tester.runAsync(() async {
-      final image = await samplePage();
-      final source = comicPageSource(const Size(100, 80), half: 1);
-      final matrix = ComicReaderPreferences().colorMatrix;
-      Future<ui.Image> compose(List<ComicTextRegion> translations) async =>
-          decode(
-            await composeComicPage(
-              image: image,
-              source: source,
-              colorMatrix: matrix,
-              brightness: 1,
-              displayWidth: 50,
-              translations: translations,
-            ),
-          );
-      final original = await compose([]);
-      final outside = await compose(const [
-        ComicTextRegion(
-          text: 'outside',
-          translation: 'OUTSIDE',
-          x: .05,
-          y: .2,
-          width: .1,
-          height: .2,
-        ),
-      ]);
-      final translated = await compose(const [
-        ComicTextRegion(
-          text: 'inside',
-          translation: 'TEST',
-          x: .55,
-          y: .2,
-          width: .4,
-          height: .4,
-        ),
-      ]);
-      final plain = (await original.toByteData())!.buffer.asUint8List();
-      expect(
-        (await outside.toByteData())!.buffer.asUint8List(),
-        orderedEquals(plain),
-      );
-      final data = (await translated.toByteData())!.buffer.asUint8List();
-      var changed = 0, white = 0, ink = 0;
-      for (var i = 0; i < data.length; i += 4) {
-        if (data[i] != plain[i]) changed++;
-        if (data[i] > 240 && data[i + 1] > 240 && data[i + 2] > 240) white++;
-        if (data[i] < 20 && data[i + 1] < 20 && data[i + 2] < 20) ink++;
-      }
-      expect(changed, greaterThan(200));
-      expect(white, greaterThan(100));
-      expect(ink, greaterThan(5));
-      original.dispose();
-      outside.dispose();
-      translated.dispose();
       image.dispose();
     });
   });

@@ -35,7 +35,6 @@ class ConfigurationBackup {
     'search_settings.json',
     'floating_modules.json',
     'frosted_settings.json',
-    'comic_image_tools.json',
     'speech_cloud.json',
     'browse_layout.json',
     'network_settings.json',

@@ -14,7 +14,6 @@ import '../../shared/widgets/column_list.dart';
 import '../../shared/widgets/cat_site_tile.dart';
 import '../../shared/widgets/drawer_geometry.dart';
 import '../../core/reading/browse_layout.dart';
-import '../../core/reading/comic_image_tools.dart';
 import '../../core/session/privacy_settings.dart';
 import '../../shared/widgets/source_drag_tile.dart';
 import '../../shared/widgets/source_swipe_tile.dart';
@@ -223,8 +222,7 @@ class _CatPageState extends State<CatPage>
         cacheDir: library!.imageCacheDir,
         memoryBudgetBytes: SectionImagePipeline.thumbnailBudgetBytes,
         maxConcurrent: SectionImagePipeline.coverConcurrency,
-        decodeTransform: (bytes) =>
-            automaticUpscale(bytes, UpscaleSurface.cover),
+        decodeTransform: (bytes) => bytes,
       );
       await service.checkUpdates();
       final requested = widget.requestedSite;

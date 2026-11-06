@@ -28,7 +28,6 @@ import 'dart:ui' as ui;
 import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../shared/widgets/poster_gradient_scaffold.dart';
-import '../../shared/widgets/source_translation.dart';
 import '../../shared/widgets/network_owned_state.dart';
 import '../../core/net/network_cancellation.dart';
 
@@ -47,7 +46,6 @@ import 'package:flutter/material.dart';
 import '../../core/player/abstract_player.dart';
 import '../../core/player/player_experience_store.dart';
 import '../../core/player/player_kernel_launcher.dart';
-import '../../core/reading/comic_image_tools.dart';
 import '../../core/reading/reading.dart';
 import '../../core/source/source.dart';
 
@@ -154,16 +152,14 @@ class _VideoDetailPageState extends State<VideoDetailPage>
       widget.imagePipeline ??
       SectionImagePipeline(
         cacheDir: widget.library.imageCacheDir,
-        decodeTransform: (bytes) =>
-            automaticUpscale(bytes, UpscaleSurface.videoPoster),
+        decodeTransform: (bytes) => bytes,
       );
   // TMDB 图片按自己的代理地址获取，不继承源站 Cookie/代理配置。
   late final tmdbImagePipeline = SectionImagePipeline(
     cacheDir: '${widget.library.imageCacheDir}/tmdb',
     memoryBudgetBytes: SectionImagePipeline.thumbnailBudgetBytes,
     cacheOriginalBytes: true,
-    decodeTransform: (bytes) =>
-        automaticUpscale(bytes, UpscaleSurface.videoPoster),
+    decodeTransform: (bytes) => bytes,
   );
   @override
   void initState() {
@@ -965,7 +961,6 @@ class _VideoDetailPageState extends State<VideoDetailPage>
                       ? pipeline
                       : tmdbImagePipeline,
                   url: _displayedPoster ?? sourceCover,
-                  surface: UpscaleSurface.videoPoster,
                   origin: _displayedPoster == null ? '源站海报' : 'TMDB 海报',
                 );
               case 'bangumi':
@@ -1191,7 +1186,7 @@ class _VideoDetailPageState extends State<VideoDetailPage>
           key: const Key('video-detail-summary'),
           onTap: () =>
               setState(() => descriptionExpanded = !descriptionExpanded),
-          child: SourceText(
+          child: Text(
             text,
             maxLines: descriptionExpanded ? null : 2,
             overflow: descriptionExpanded ? null : TextOverflow.ellipsis,
@@ -2111,10 +2106,6 @@ class _VideoDetailPageState extends State<VideoDetailPage>
   static const _compactAccent = Color(0xFFE83E68);
 
   List<Widget> translationDownloadActions() => [
-    SourceTranslationAction(
-      key: const Key('video-detail-translation'),
-      texts: [detail?.title ?? widget.item.title, synopsis],
-    ),
     IconButton(
       key: const Key('video-detail-download'),
       tooltip: '下载视频 / 选集',
@@ -2588,7 +2579,7 @@ class _VideoDetailPageState extends State<VideoDetailPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        SourceText(
+                        Text(
                           title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -2872,7 +2863,7 @@ class _VideoDetailPageState extends State<VideoDetailPage>
                             children: [
                               TmdbTitleArtwork(
                                 controller: tmdb,
-                                fallback: SourceText(
+                                fallback: Text(
                                   detail?.title ?? widget.item.title,
                                   textAlign: TextAlign.center,
                                   style: dark.textTheme.titleLarge?.copyWith(

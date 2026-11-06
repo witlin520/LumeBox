@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../core/reading/reading.dart';
-import '../../shared/widgets/source_translation.dart';
 import 'poster_card.dart';
 import 'section_toolbar.dart';
 
@@ -151,7 +150,7 @@ class AggregateSearchPoster extends StatelessWidget {
                   child: MediaQuery.withClampedTextScaling(
                     minScaleFactor: 1,
                     maxScaleFactor: 2,
-                    child: SourceText(
+                    child: Text(
                       hit.item.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,

@@ -11,7 +11,6 @@ import 'core/search/search_settings.dart';
 import 'core/source/source_content_visibility.dart';
 import 'core/theme/floating_modules.dart';
 import 'core/theme/frosted_settings.dart';
-import 'core/reading/comic_image_tools.dart';
 import 'core/session/privacy_settings.dart';
 import 'core/session/retired_module_cache.dart';
 
@@ -87,10 +86,6 @@ void main() {
               StartupTask('字体目录', () => UserFonts.instance.boot()),
               StartupTask('悬浮模块', () => FloatingModules.instance.boot()),
               StartupTask('玻璃材质', () => FrostedSettings.instance.boot()),
-              StartupTask(
-                '图片工具',
-                () => ComicImageToolsSettings.instance.boot(),
-              ),
             ]);
             try {
               await UserFonts.instance

@@ -108,7 +108,6 @@ class DiagnosticExporter {
     try {
       final directory = await getApplicationSupportDirectory();
       for (final name in [
-        'comic_image_tools.json',
         'speech_cloud.json',
         'tmdb_settings.json',
         'network_settings.json',

@@ -1,4 +1,3 @@
-import '../../shared/widgets/source_translation.dart';
 import '../../core/source/source_labels.dart';
 import '../../shared/widgets/network_owned_state.dart';
 
@@ -381,17 +380,7 @@ class _SourceFilterPageState extends State<SourceFilterPage>
     final groups = _groups;
     return GlassScaffold(
       behindBar: true,
-      actions: [
-        SourceTranslationAction(
-          texts: [
-            ..._categories.map((category) => category.title),
-            for (final group in groups ?? const <SourceFilterGroup>[]) ...[
-              group.title,
-              ...group.options.map((option) => option.title),
-            ],
-          ],
-        ),
-      ],
+      actions: [],
       title: widget.categoryTitle == null
           ? '筛选'
           : '筛选 · ${widget.categoryTitle}',
@@ -506,7 +495,7 @@ class _SourceFilterPageState extends State<SourceFilterPage>
                 final category = _categories[index];
                 final on = _categoryId == category.id;
                 return ChoiceChip(
-                  label: SourceText(sourceLabel(category.title)),
+                  label: Text(sourceLabel(category.title)),
                   selected: on,
                   onSelected: (_) {
                     setState(() => _categoryId = on ? null : category.id);
@@ -571,7 +560,7 @@ class _SourceFilterPageState extends State<SourceFilterPage>
         children: <Widget>[
           Padding(
             padding: const EdgeInsets.fromLTRB(2, 0, 2, 8),
-            child: SourceText(
+            child: Text(
               sourceLabel(group.title),
               style: TextStyle(
                 fontSize: LumeTypography.bodySize,
@@ -590,7 +579,7 @@ class _SourceFilterPageState extends State<SourceFilterPage>
                 final option = group.options[index];
                 final on = selected.contains(option.id);
                 return ChoiceChip(
-                  label: SourceText(sourceLabel(option.title)),
+                  label: Text(sourceLabel(option.title)),
                   selected: on,
                   onSelected: (_) => _toggle(group.id, option.id),
                 );

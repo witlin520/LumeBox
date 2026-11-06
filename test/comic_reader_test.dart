@@ -10,10 +10,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:path/path.dart' as p;
 
-import 'package:lume_box/core/reading/comic_image_tools.dart';
 import 'package:lume_box/core/reading/reading.dart';
 import 'package:lume_box/core/session/section.dart';
-import 'package:lume_box/core/speech/speech_session.dart';
 import 'package:lume_box/core/session/section_scope.dart';
 import 'package:lume_box/core/source/source.dart';
 import 'package:lume_box/features/comic/comic_reader_page.dart';
@@ -684,100 +682,7 @@ void main() {
     });
   });
 
-  testWidgets('漫画朗读用 OCR 文本与单说话人 TTS 起播', (tester) async {
-    final speech = _FakeSpeechBackend();
-    final tools = _FakeImageTools(['第一句', '第二句']);
-    await tester.binding.setSurfaceSize(const Size(420, 880));
-    addTearDown(() => tester.binding.setSurfaceSize(null));
-    viewport = const Size(420, 880);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: MediaQuery(
-          data: const MediaQueryData(size: Size(420, 880), devicePixelRatio: 1),
-          child: ComicReaderPage(
-            library: library,
-            dataSource: FakeReadingDataSource(
-              section: Section.comic,
-              imageCount: 2,
-            ),
-            target: target,
-            chapters: chapters(1),
-            initialChapterIndex: 0,
-            runtimeAvailable: true,
-            speechBackend: speech,
-            imageTools: tools,
-            pageBytes: (_) async => Uint8List.fromList([1, 2, 3]),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.byTooltip('更多'));
-    await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.text('朗读'),
-      200,
-      scrollable: find.byType(Scrollable).last,
-    );
-    await tester.tap(find.text('朗读'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('漫画朗读'), findsWidgets);
-    await tester.tap(find.text('朗读本页'));
-    await tester.pumpAndSettle();
-
-    expect(speech.spoken.join('\n'), contains('第一句'));
-    expect(speech.spoken.join('\n'), contains('第二句'));
   });
-}
-
-class _FakeSpeechBackend implements SpeechBackend {
-  final controller = StreamController<SpeechEvent>.broadcast();
-  final spoken = <String>[];
-
-  @override
-  Future<bool> isSupported() async => true;
-
-  @override
-  Future<void> speak(String text) async {
-    spoken.add(text);
-    controller.add(const SpeechEvent(SpeechEventKind.started));
-  }
-
-  @override
-  Future<void> stop() async {}
-
-  @override
-  Future<void> pause() async {}
-
-  @override
-  Future<void> resume() async {}
-
-  @override
-  Stream<SpeechEvent> get events => controller.stream;
-}
-
-class _FakeImageTools extends ComicImageTools {
-  _FakeImageTools(this.lines);
-
-  final List<String> lines;
-
-  @override
-  Future<List<ComicTextRegion>> recognizeRegions(Uint8List bytes) async => [
-    for (var i = 0; i < lines.length; i++)
-      ComicTextRegion(
-        text: lines[i],
-        translation: '',
-        x: .1,
-        y: .1 + i * .2,
-        width: .6,
-        height: .1,
-      ),
-  ];
-
-  @override
-  void dispose() {}
 }
 
 /// 生成一张真实 PNG 的字节：给管线喂「磁盘缓存」，让测试环境不必联网。

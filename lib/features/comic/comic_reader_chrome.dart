@@ -65,186 +65,6 @@ extension _ComicReaderChrome on _ComicReaderPageState {
     });
   }
 
-  void _onComicSpeechPosition(int offset) {
-    final page = _speechText, url = _speechUrl;
-    if (!mounted || page == null || url == null) return;
-    _speechCursor.value = ComicSpeechCursor(url, page, offset);
-  }
-
-  Future<void> _stopComicSpeech({bool closePanel = false}) async {
-    _speechContinuous = false;
-    _speechGeneration++;
-    _speechWorking = false;
-    _speechText = null;
-    _speechUrl = null;
-    _speechCursor.value = null;
-    if (closePanel) {
-      _refresh(() {
-        _speechPanelOpened = false;
-        _speechMini = false;
-      });
-    }
-    await _speech?.stop();
-  }
-
-  Future<void> _changeComicSpeechSettings(SpeechSettings settings) async {
-    _refresh(() => _speechSettings = settings);
-    widget.library.setSetting(SpeechSettings.settingKey, settings.encode());
-    _applyComicSpeechSettings();
-    final session = _speech;
-    if (session != null &&
-        (session.isActive || session.isPaused) &&
-        session.segmentCount > 0) {
-      final rejection = await session.seekToSegment(session.segmentIndex);
-      if (mounted && rejection != null) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(rejection)));
-      }
-    }
-  }
-
-  Future<void> _showSpeechSpeed() => _readerSheet(
-    '朗读倍速',
-    (update) => ListView(
-      children: [
-        for (final speed in [.5, .75, 1.0, 1.25, 1.5, 1.75, 2.0])
-          _entry(
-            Icons.speed,
-            '${speed.toString().replaceFirst(RegExp(r'\.0$'), '')}×',
-            () {
-              Navigator.pop(context);
-              unawaited(
-                _changeComicSpeechSettings(
-                  _speechSettings.copyWith(rate: speed / 2),
-                ),
-              );
-            },
-            selected: (_speechSettings.rate * 2 - speed).abs() < .01,
-            arrow: false,
-          ),
-        const Padding(
-          padding: EdgeInsets.all(20),
-          child: Text(
-            '播放中切换会从当前片段开头应用；暂停时保持暂停。',
-            style: TextStyle(fontSize: 12, color: Colors.grey),
-          ),
-        ),
-      ],
-    ),
-    height: .68,
-  );
-
-  Future<List<(String, String)>> _loadComicVoices() async {
-    try {
-      final raw = await const MethodChannel('lumebox/speech')
-          .invokeListMethod<dynamic>('speechVoices')
-          .timeout(const Duration(seconds: 5));
-      final voices = <String, String>{};
-      for (final voice in raw ?? []) {
-        if (voice is Map &&
-            voice['id'] is String &&
-            (voice['id'] as String).isNotEmpty) {
-          voices[voice['id'] as String] = SpeechVoiceLabels.label(voice);
-        }
-      }
-      return voices.entries.map((entry) => (entry.key, entry.value)).toList();
-    } catch (_) {
-      return [];
-    }
-  }
-
-  Future<void> _showComicVoices() async {
-    if (_speechSettings.mode != SpeechMode.system) {
-      await _showComicSpeechPanel();
-      return;
-    }
-    _comicVoices = _loadComicVoices();
-    final box = _comicVoiceAnchor.currentContext?.findRenderObject();
-    final anchor = box is RenderBox && box.hasSize
-        ? box.localToGlobal(Offset.zero) & box.size
-        : null;
-    await _showReaderMenu('voices', anchor: anchor);
-  }
-
-  Widget _voiceMenu(void Function(VoidCallback) close) =>
-      FutureBuilder<List<(String, String)>>(
-        future: _comicVoices,
-        builder: (context, snapshot) => Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _entry(
-              Icons.record_voice_over_outlined,
-              '自动',
-              () => close(
-                () => unawaited(
-                  _changeComicSpeechSettings(
-                    _speechSettings.copyWith(narratorVoice: ''),
-                  ),
-                ),
-              ),
-              selected: _speechSettings.narratorVoice.isEmpty,
-              arrow: false,
-            ),
-            if (!snapshot.hasData)
-              const Padding(
-                padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-            for (final voice in snapshot.data ?? <(String, String)>[])
-              _entry(
-                Icons.person_outline,
-                voice.$2,
-                () => close(
-                  () => unawaited(
-                    _changeComicSpeechSettings(
-                      _speechSettings.copyWith(narratorVoice: voice.$1),
-                    ),
-                  ),
-                ),
-                selected: _speechSettings.narratorVoice == voice.$1,
-                arrow: false,
-              ),
-            if (snapshot.hasData && snapshot.data!.isEmpty)
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: Text(
-                  '系统音色列表暂不可用，可继续使用自动音色。',
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
-                ),
-              ),
-            if (snapshot.hasData &&
-                snapshot.data!.isNotEmpty &&
-                _speechSettings.narratorVoice.isNotEmpty &&
-                !snapshot.data!.any(
-                  (voice) => voice.$1 == _speechSettings.narratorVoice,
-                ))
-              const Padding(
-                padding: EdgeInsets.all(20),
-                child: Text(
-                  '已保存的音色在此设备不可用，请选择自动或其他音色。',
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
-                ),
-              ),
-            const Divider(indent: 18, endIndent: 18),
-            _entry(
-              Icons.settings_outlined,
-              '完整朗读设置',
-              () => close(_showComicSpeechPanel),
-            ),
-          ],
-        ),
-      );
-
-  Widget _buildSpeechRestore() => Positioned(
-    left: 16,
-    bottom: (_toolbar ? 78 : 16) + MediaQuery.paddingOf(context).bottom,
-    child: _roundButton(
-      Icons.record_voice_over_outlined,
-      '显示朗读栏',
-      () => _refresh(() => _speechMini = true),
-    ),
-  );
-
   /// Display slices never change the source page number stored in progress/bookmarks.
   List<(int, int)> get _displayPages => [
     for (var index = 0; index < _images.length; index++)
@@ -766,7 +586,6 @@ extension _ComicReaderChrome on _ComicReaderPageState {
         'zones': '点击区域',
         'bookmarks': '书签',
         'flags': '标记',
-        'translation': '翻译',
         'orientation': '屏幕方向',
         'presets': '阅读预设',
       }[route] ??
@@ -1060,95 +879,6 @@ extension _ComicReaderChrome on _ComicReaderPageState {
             arrow: false,
           ),
         ];
-      case 'translation':
-        return [
-          _entry(
-            Icons.close,
-            '关闭',
-            () => change(() {
-              _translationGeneration++;
-              _setTranslationScope('off');
-              _translationBusy = false;
-              _translations.clear();
-            }),
-            selected: _translationScope == 'off',
-            arrow: false,
-          ),
-          _entry(
-            Icons.description_outlined,
-            '当前页',
-            () => close(() {
-              _setTranslationScope('page');
-              _translatePages(false);
-            }),
-            selected: _translationScope == 'page',
-            arrow: false,
-          ),
-          _entry(
-            Icons.auto_awesome,
-            '实时翻译',
-            () => close(() {
-              _setTranslationScope('live');
-              _translatePages(false);
-            }),
-            detail: '停留当前页后自动翻译，翻页继续',
-            selected: _translationScope == 'live',
-            arrow: false,
-          ),
-          _entry(
-            Icons.menu_book_outlined,
-            '本章',
-            () => close(() {
-              _setTranslationScope('chapter');
-              _translatePages(true);
-            }),
-            selected: _translationScope == 'chapter',
-            arrow: false,
-          ),
-          _entry(
-            Icons.library_books_outlined,
-            '本系列',
-            () => close(() {
-              _setTranslationScope('series');
-              _translatePages(true);
-            }),
-            detail: '记住本系列，下次阅读继续自动翻译',
-            selected: _translationScope == 'series',
-            arrow: false,
-          ),
-          const Divider(indent: 18, endIndent: 18),
-          _entry(
-            Icons.language,
-            '翻译语言与引擎',
-            () => close(
-              () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) =>
-                      const ComicImageToolsSettingsPage(translation: true),
-                ),
-              ),
-            ),
-          ),
-          _entry(
-            Icons.gesture,
-            '翻译选定区域',
-            _images.isEmpty ? null : () => close(_translateSelectedRegion),
-            detail: '将圈出的内容作为一个对话框翻译',
-          ),
-          _entry(
-            Icons.touch_app_outlined,
-            '圈选翻译',
-            () => change(() {
-              _preferences.circleTranslation = !_preferences.circleTranslation;
-              _saveExperience();
-            }),
-            detail: _preferences.circleTranslation
-                ? '开启 · 长按图片进入圈选'
-                : '关闭 · 长按图片仍显示操作菜单',
-            selected: _preferences.circleTranslation,
-            arrow: false,
-          ),
-        ];
       default:
         return [
           _entry(
@@ -1199,31 +929,6 @@ extension _ComicReaderChrome on _ComicReaderPageState {
             '点击区域',
             () => open('zones'),
             detail: _preferences.tapZones == 'disabled' ? '已禁用' : '已启用',
-          ),
-          _entry(
-            Icons.translate,
-            '翻译',
-            () => open('translation'),
-            detail: _translationScope == 'off'
-                ? '关闭'
-                : '${const {'page': '当前页', 'chapter': '本章', 'series': '本系列', 'live': '实时翻译'}[_translationScope]}'
-                      ' · ${_translationBusy
-                          ? '正在翻译…'
-                          : _translations.isEmpty
-                          ? '无识别结果'
-                          : '已翻译 ${_translations.length} 页'}',
-          ),
-          _entry(
-            Icons.volume_up_outlined,
-            '朗读',
-            () => close(() {
-              _refresh(() {
-                _speechPanelOpened = true;
-                _speechMini = true;
-              });
-              _showComicSpeechPanel();
-            }),
-            arrow: false,
           ),
           _entry(
             Icons.bedtime_outlined,
@@ -1580,18 +1285,6 @@ extension _ComicReaderChrome on _ComicReaderPageState {
         ),
       ],
     ),
-    leading: (_) => IconButton(
-      tooltip: '图片处理模型',
-      icon: const LumeIcon(
-        Icons.auto_fix_high_outlined,
-        slot: 'comic_reader_chrome.11',
-      ),
-      onPressed: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => const ComicImageToolsSettingsPage(),
-        ),
-      ),
-    ),
     grouped: true,
   );
 
@@ -1759,8 +1452,6 @@ extension _ComicReaderChrome on _ComicReaderPageState {
             _sleepTimer = Timer(Duration(minutes: minutes), () {
               if (!mounted) return;
               _stopAutoScroll();
-              unawaited(_stopComicSpeech());
-              _speechStatus.value = '睡眠定时已停止朗读';
               _refresh(() => _sleepDeadline = null);
             });
             Navigator.pop(context);
@@ -2171,16 +1862,12 @@ extension _ComicReaderChrome on _ComicReaderPageState {
     // turn or slider edit must not silently export another page or mixed values.
     final index = _page;
     final url = _images[index];
-    final override = _pageOverrides[url];
     final half = _readingMode == ComicReadingMode.single ? _wideHalf : 0;
     final crop = _preferences.cropRatio;
     final matrix = List<double>.of(_preferences.colorMatrix);
     final brightness = _preferences.brightness;
     final gamma = _preferences.gamma, sharpness = _preferences.sharpness;
     final denoise = _preferences.denoise;
-    final translations = List<ComicTextRegion>.of(_translations[url] ?? []);
-    final scaler = MediaQuery.textScalerOf(context);
-    final fontFamily = Theme.of(context).textTheme.bodyMedium?.fontFamily;
     final width = _readingMode == ComicReadingMode.doublePage
         ? math.max(1.0, (_innerWidth - _settings.pageGap) / 2)
         : _innerWidth;
@@ -2192,7 +1879,7 @@ extension _ComicReaderChrome on _ComicReaderPageState {
     _refresh(() => _sharing = true);
     ui.Image? source, filtered;
     try {
-      final bytes = override ?? await widget.pageBytes?.call(url);
+      final bytes = await widget.pageBytes?.call(url);
       if (!mounted) return;
       if (bytes != null) {
         final codec = await ui.instantiateImageCodec(
@@ -2232,9 +1919,6 @@ extension _ComicReaderChrome on _ComicReaderPageState {
         colorMatrix: matrix,
         brightness: brightness,
         displayWidth: math.min(width, maxHeight * rect.width / rect.height),
-        translations: translations,
-        textScaler: scaler,
-        fontFamily: fontFamily,
       );
       if (!mounted) return;
       await (widget.imageExporter ?? exportProcessedImage)(output, name);
@@ -2249,247 +1933,6 @@ extension _ComicReaderChrome on _ComicReaderPageState {
       _refresh(() => _sharing = false);
     }
   }
-
-  void _setTranslationScope(String scope) {
-    _translationScopeChosen = true;
-    _liveTranslationTimer?.cancel();
-    _liveTranslationAttempted.clear();
-    _translationGeneration++;
-    _translationBusy = false;
-    _translationScope = scope;
-    final data = _annotations();
-    data['translation.scope'] = scope == 'series' ? 'series' : 'off';
-    widget.library.setSetting(_annotationKey, jsonEncode(data));
-  }
-
-  Future<void> _translatePages(bool chapter) async {
-    if (_images.isEmpty || _translationBusy) return;
-    final generation = ++_translationGeneration;
-    final urls = List<String>.of(_images);
-    final current = _page;
-    String? warning;
-    _refresh(() => _translationBusy = true);
-    try {
-      for (final index
-          in chapter ? List<int>.generate(urls.length, (i) => i) : [current]) {
-        if (!mounted || generation != _translationGeneration) break;
-        final url = urls[index];
-        if (_translationScope == 'live') _liveTranslationAttempted.add(url);
-        final bytes =
-            _pageOverrides[url] ??
-            await (widget.pageBytes?.call(url) ?? _pipeline.bytes(url));
-        if (!mounted || generation != _translationGeneration) break;
-        if (bytes == null) throw StateError('第 ${index + 1} 页未能加载');
-        if (_imageTools.preferences.serverTranslation) {
-          final translated = await _imageTools.translateImageOnServer(bytes);
-          if (!mounted || generation != _translationGeneration) break;
-          _refresh(() {
-            _pageOverrides[url] = translated;
-            _translations.remove(url);
-          });
-          continue;
-        }
-        final regions = await _imageTools.translate(bytes);
-        if (regions.isEmpty) {
-          warning ??=
-              _imageTools.lastTranslationWarning ??
-              '第 ${index + 1} 页未识别到可翻译文字，可尝试圈选翻译或整页翻译服务器';
-        }
-        warning ??= _imageTools.lastTranslationWarning;
-        if (!mounted || generation != _translationGeneration) break;
-        _refresh(() => _translations[url] = regions);
-      }
-      if (mounted && generation == _translationGeneration && warning != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              warning,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        );
-      }
-    } catch (error) {
-      if (mounted && generation == _translationGeneration) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              error is PlatformException
-                  ? error.message ?? '翻译未完成，请检查语言和翻译设置'
-                  : error is FormatException
-                  ? error.message
-                  : '翻译未完成，请检查语言、网络和翻译设置',
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        );
-      }
-    } finally {
-      if (mounted && generation == _translationGeneration) {
-        _refresh(() => _translationBusy = false);
-        if (_page != current) _scheduleLiveTranslation();
-      }
-    }
-  }
-
-  Widget _buildSpeechMini() => Positioned(
-    left: 16,
-    right: 16,
-    bottom: 88 + MediaQuery.paddingOf(context).bottom,
-    child: ValueListenableBuilder<SpeechState>(
-      valueListenable: _speechState,
-      builder: (context, state, _) => _glass(
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ValueListenableBuilder<ComicSpeechCursor?>(
-                valueListenable: _speechCursor,
-                builder: (context, cursor, _) {
-                  if (cursor == null || cursor.text.isEmpty) {
-                    return ValueListenableBuilder<String>(
-                      valueListenable: _speechStatus,
-                      builder: (context, status, _) => Text(
-                        status.isEmpty ? '漫画朗读' : status,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    );
-                  }
-                  return Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(text: cursor.text.substring(0, cursor.start)),
-                        TextSpan(
-                          text: cursor.text.substring(cursor.start, cursor.end),
-                          style: const TextStyle(
-                            color: _readerAccent,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        TextSpan(text: cursor.text.substring(cursor.end)),
-                      ],
-                    ),
-                    key: const Key('comic.speech.highlight'),
-                    maxLines: 2,
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 13),
-                  );
-                },
-              ),
-              FittedBox(
-                fit: BoxFit.scaleDown,
-                child: SizedBox(
-                  width: 400,
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                    children: [
-                      IconButton(
-                        tooltip: '停止朗读',
-                        onPressed: () {
-                          unawaited(_stopComicSpeech(closePanel: true));
-                        },
-                        icon: const LumeIcon(
-                          Icons.close,
-                          slot: 'comic_reader_chrome.20',
-                          size: 20,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '朗读上一页',
-                        onPressed: _page > 0
-                            ? () {
-                                _goToPage(_page - 1);
-                                _startComicSpeech(continuous: false);
-                              }
-                            : null,
-                        icon: const LumeIcon(
-                          Icons.fast_rewind,
-                          slot: 'comic_reader_chrome.21',
-                          size: 22,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: state == SpeechState.speaking
-                            ? '暂停朗读'
-                            : '继续朗读',
-                        onPressed: () async {
-                          if (state == SpeechState.speaking) {
-                            await _speech?.pause();
-                          } else if (state == SpeechState.paused) {
-                            await _speech?.resume();
-                          } else {
-                            await _startComicSpeech(continuous: true);
-                          }
-                        },
-                        icon: LumeIcon(
-                          state == SpeechState.speaking
-                              ? Icons.pause
-                              : Icons.play_arrow,
-                          slot: 'comic_reader_chrome.22',
-                          variant: true,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '朗读下一页',
-                        onPressed: _page + 1 < _images.length
-                            ? () {
-                                _goToPage(_page + 1);
-                                _startComicSpeech(continuous: false);
-                              }
-                            : null,
-                        icon: const LumeIcon(
-                          Icons.fast_forward,
-                          slot: 'comic_reader_chrome.23',
-                          size: 22,
-                        ),
-                      ),
-                      TextButton(
-                        key: const Key('comic.speech.speed'),
-                        onPressed: _showSpeechSpeed,
-                        child: Text(
-                          '${(_speechSettings.rate * 2).toStringAsFixed(1)}×',
-                          style: const TextStyle(
-                            color: Colors.black,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        key: _comicVoiceAnchor,
-                        tooltip: '声音与朗读设置',
-                        onPressed: _showComicVoices,
-                        icon: const LumeIcon(
-                          Icons.record_voice_over_outlined,
-                          slot: 'comic_reader_chrome.24',
-                          size: 21,
-                        ),
-                      ),
-                      IconButton(
-                        tooltip: '隐藏朗读栏',
-                        onPressed: () => _refresh(() => _speechMini = false),
-                        icon: const LumeIcon(
-                          Icons.visibility_off_outlined,
-                          slot: 'comic_reader_chrome.25',
-                          size: 21,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        radius: 24,
-      ),
-    ),
-  );
 
   void _stopAutoScroll() {
     _autoTicker?.stop();

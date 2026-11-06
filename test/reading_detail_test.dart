@@ -15,7 +15,6 @@ import 'package:lume_box/core/theme/lume_theme.dart';
 import 'package:lume_box/features/comic/comic_detail_page.dart';
 import 'package:lume_box/features/comic/comic_reader_page.dart';
 import 'package:lume_box/shared/widgets/glass_card.dart';
-import 'package:lume_box/shared/widgets/source_translation.dart';
 import 'package:lume_box/shared/widgets/chapter_tile.dart';
 
 import 'support/fake_reading_source.dart';
@@ -224,16 +223,6 @@ void main() {
     await tester.tap(find.byTooltip('显示全部章节'));
     await tester.pumpAndSettle();
     expect(find.text('第 1 章'), findsOneWidget);
-    final actions = find
-        .ancestor(of: find.text('加入书架'), matching: find.byType(Row))
-        .first;
-    expect(
-      find.descendant(
-        of: actions,
-        matching: find.byType(SourceTranslationAction),
-      ),
-      findsOneWidget,
-    );
   });
 
   testWidgets('漫画详情：点章节进阅读器，只写历史，不自动收藏', (tester) async {

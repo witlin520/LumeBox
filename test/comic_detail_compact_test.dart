@@ -12,7 +12,6 @@ import 'package:lume_box/core/session/section_scope.dart';
 import 'package:lume_box/core/source/source.dart';
 import 'package:lume_box/features/comic/comic_detail_page.dart';
 import 'package:lume_box/features/comic/comic_reader_page.dart';
-import 'package:lume_box/shared/widgets/source_translation.dart';
 
 import 'support/fake_reading_source.dart';
 import 'support/fake_source_manager.dart';
@@ -175,8 +174,8 @@ void main() {
     final description = find.byKey(const Key('comic-detail-description'));
     expect(
       tester
-          .widget<SourceText>(
-            find.descendant(of: description, matching: find.byType(SourceText)),
+          .widget<Text>(
+            find.descendant(of: description, matching: find.byType(Text)),
           )
           .maxLines,
       2,
@@ -185,8 +184,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       tester
-          .widget<SourceText>(
-            find.descendant(of: description, matching: find.byType(SourceText)),
+          .widget<Text>(
+            find.descendant(of: description, matching: find.byType(Text)),
           )
           .maxLines,
       isNull,

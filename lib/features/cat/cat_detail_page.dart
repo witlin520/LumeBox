@@ -22,7 +22,6 @@ import '../../core/cat/cat_data_source.dart';
 import '../../core/cat/cat_web_parse.dart';
 import '../../core/source/source.dart';
 import '../../core/reading/reading.dart';
-import '../../core/reading/comic_image_tools.dart';
 import '../../core/player/abstract_player.dart';
 import '../../core/player/player_experience_store.dart';
 import '../../core/player/player_factory.dart';
@@ -58,14 +57,14 @@ class _CatDetailPageState extends State<CatDetailPage>
     cacheDir: widget.library.imageCacheDir,
     memoryBudgetBytes: SectionImagePipeline.thumbnailBudgetBytes,
     maxConcurrent: SectionImagePipeline.coverConcurrency,
-    decodeTransform: (bytes) => automaticUpscale(bytes, UpscaleSurface.cover),
+    decodeTransform: (bytes) => bytes,
   );
   late final tmdb = TmdbDetailController(widget.item.title);
   late final tmdbImagePipeline = SectionImagePipeline(
     cacheDir: '${widget.library.imageCacheDir}/tmdb',
     memoryBudgetBytes: SectionImagePipeline.thumbnailBudgetBytes,
     cacheOriginalBytes: true,
-    decodeTransform: (bytes) => automaticUpscale(bytes, UpscaleSurface.cover),
+    decodeTransform: (bytes) => bytes,
   );
   SourceDetail? detail;
   List<SourceChapter> chapters = [];

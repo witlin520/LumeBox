@@ -14,7 +14,6 @@ import '../../core/player/brightness.dart';
 import '../../core/player/pip.dart';
 import '../../core/player/player_factory.dart';
 import '../../core/player/player_kernel_launcher.dart';
-import '../../core/reading/comic_image_tools.dart';
 import '../../core/player/player_settings.dart';
 import '../../core/reading/reading.dart';
 import '../../core/session/section.dart';
@@ -147,8 +146,7 @@ class _VideoPageState extends State<VideoPage> {
           memoryBudgetBytes: SectionImagePipeline.thumbnailBudgetBytes,
           // 封面网格按封面并发（4）跑：并发太大被图床限流，反而更多空白。
           maxConcurrent: SectionImagePipeline.coverConcurrency,
-          decodeTransform: (bytes) =>
-              automaticUpscale(bytes, UpscaleSurface.videoPoster),
+          decodeTransform: (bytes) => bytes,
         );
       });
     } catch (error, stackTrace) {

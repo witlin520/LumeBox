@@ -16,7 +16,6 @@ import 'history_privacy.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/reading/reading.dart';
-import '../../core/reading/comic_image_tools.dart';
 import '../../core/session/section.dart';
 import '../../core/theme/lume_theme.dart';
 import '../../shared/widgets/glass_card.dart';
@@ -107,12 +106,7 @@ class _ReadingHistorySheetState extends State<ReadingHistorySheet> {
     cacheDir: widget.library.imageCacheDir,
     memoryBudgetBytes: SectionImagePipeline.thumbnailBudgetBytes,
     diskCache: SectionImagePipeline.diskCacheFor(widget.section),
-    decodeTransform: (bytes) => automaticUpscale(
-      bytes,
-      widget.section == Section.video
-          ? UpscaleSurface.videoPoster
-          : UpscaleSurface.cover,
-    ),
+    decodeTransform: (bytes) => bytes,
   );
   @override
   void dispose() {

@@ -5,7 +5,6 @@ import '../../shared/widgets/glass_card.dart';
 import '../shell/shell_dock.dart';
 import 'comic_settings.dart';
 import 'comic_reader_preferences.dart';
-import 'comic_image_tools_page.dart';
 import '../../core/reading/chapter_display_order.dart';
 import '../../shared/widgets/chapter_order_controls.dart';
 
@@ -30,7 +29,6 @@ class ComicReaderSettingsPage extends StatefulWidget {
     this.canSavePage = false,
     this.bookmarkCount = 0,
     this.onOpenBookmarks,
-    this.onImageTools,
     this.chapterOrder,
     this.preferences,
     this.onPreferencesChanged,
@@ -40,7 +38,6 @@ class ComicReaderSettingsPage extends StatefulWidget {
   final ComicReaderPreferences? preferences;
   final VoidCallback? onPreferencesChanged;
   final ChapterDisplayOrder? chapterOrder;
-  final Future<void> Function()? onImageTools;
   final ValueChanged<ComicReaderSettings> onChanged;
 
   /// 这本书当前的书签数（显示用）。
@@ -272,71 +269,6 @@ class _ComicReaderSettingsPageState extends State<ComicReaderSettingsPage> {
           ),
           if (widget.chapterOrder != null)
             ChapterAutoOrderSwitch(order: widget.chapterOrder!),
-          _section('图片与翻译'),
-          GlassCard(
-            child: Column(
-              children: [
-                if (widget.onImageTools != null)
-                  ListTile(
-                    leading: const Icon(Icons.auto_fix_high),
-                    title: const Text('当前页 AI 超分 / 上色 / 翻译'),
-                    subtitle: const Text('保留原图对照，可保存或分享结果'),
-                    onTap: widget.onImageTools,
-                  ),
-                ListTile(
-                  leading: const Icon(Icons.hd_outlined),
-                  title: const Text('AI 图片超分与上色'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) => const ComicImageToolsSettingsPage(),
-                    ),
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.translate),
-                  title: const Text('漫画翻译'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.push(
-                    context,
-                    MaterialPageRoute<void>(
-                      builder: (_) =>
-                          const ComicImageToolsSettingsPage(translation: true),
-                    ),
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.gesture),
-                  title: const Text('圈选翻译是什么'),
-                  subtitle: const Text('圈出一个对话框，合并区域文字后翻译'),
-                  onTap: () => showDialog<void>(
-                    context: context,
-                    builder: (c) => AlertDialog(
-                      title: const Text('圈选翻译'),
-                      content: const Text(
-                        '开启圈选后，在漫画上拖出区域，只识别并翻译圈内的文字。适合自动识别漏掉的对白、多行对话或只想翻译一句话时使用。翻译选定区域会把圈内文字合并成一个对话框翻译；它不是整页重绘。',
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.pop(c),
-                          child: const Text('知道了'),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                if (prefs != null)
-                  SwitchListTile(
-                    title: const Text('长按圈选翻译'),
-                    subtitle: const Text('开启后长按图片进入区域翻译；关闭后恢复图片操作菜单'),
-                    value: prefs.circleTranslation,
-                    onChanged: (v) =>
-                        _changePreferences(() => prefs.circleTranslation = v),
-                  ),
-              ],
-            ),
-          ),
           if (widget.onSavePage != null || widget.onOpenBookmarks != null) ...[
             _section('本书工具'),
             GlassCard(

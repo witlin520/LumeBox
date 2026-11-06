@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../core/session/section.dart';
 import '../../core/source/source.dart';
+import '../../core/util/download_keep_alive.dart';
 import '../../core/util/sensitive_data.dart';
 import 'source_playback.dart';
 import 'video_download_merger.dart';
@@ -221,6 +222,9 @@ class VideoDownloadCenter extends ChangeNotifier {
   Future<void> _drain() async {
     if (_draining) return;
     _draining = true;
+    // 下载队列活动期间：iOS 上让原生侧播放静音循环音频，锁屏后 App 不被挂起，
+    // Dart 下载器因此能继续；队列空了在 finally 里停掉。
+    unawaited(DownloadKeepAlive.start());
     try {
       while (true) {
         final task = tasks.where((t) => t.state == 'queued').firstOrNull;
@@ -310,6 +314,7 @@ class VideoDownloadCenter extends ChangeNotifier {
       }
     } finally {
       _draining = false;
+      unawaited(DownloadKeepAlive.stop());
     }
   }
 

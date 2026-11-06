@@ -31,6 +31,18 @@ class SourceScriptPresentation {
         network: (SourceMetadata.parseHeader(script)?.network ?? '').trim(),
       );
 
+  /// 超大脚本只解析头部：站点根（BASE_URL / HOSTS）与 LumeSource 头都写在
+  /// 文件顶部，正则只需扫开头一小段即可拿到展示所需的元信息。避免对动辄
+  /// 2.4MB 的内嵌 base64/压缩大块跑多轮正则（否则初次解析会卡顿甚至 OOM）。
+  static const int maxParseLength = 300 * 1024;
+
+  factory SourceScriptPresentation.fromScriptHead(String script) {
+    final head = script.length <= maxParseLength
+        ? script
+        : script.substring(0, maxParseLength);
+    return SourceScriptPresentation.fromScript(head);
+  }
+
   static String siteUrlFromScript(String script) {
     // 站点根有两种写法：单值（`BASE_URL = 'https://a.com'` / `H.base="https://a.com"`）
     // 与主机列表（`var HOSTS = ['https://a.com', 'https://a.net']`，多域名备用）。
@@ -84,7 +96,7 @@ class SourceScriptPresentation {
 }
 
 List<SourceScriptPresentation> _parsePresentations(List<String> scripts) =>
-    scripts.map(SourceScriptPresentation.fromScript).toList(growable: false);
+    scripts.map(SourceScriptPresentation.fromScriptHead).toList(growable: false);
 
 /// Cache only script-derived presentation, never mutable source settings.
 class SourcePresentationCache {
@@ -116,7 +128,7 @@ class SourcePresentationCache {
   SourceScriptPresentation read(String key, String script) {
     final cached = _cached(key, script);
     if (cached != null) return cached;
-    final info = SourceScriptPresentation.fromScript(script);
+    final info = SourceScriptPresentation.fromScriptHead(script);
     _remember(key, script, info);
     return info;
   }

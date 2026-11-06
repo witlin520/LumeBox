@@ -8,7 +8,6 @@ import 'package:lume_box/shared/widgets/lume_icon.dart';
 import 'diagnostic_export_tile.dart';
 import 'configuration_settings_page.dart';
 import 'privacy_settings_page.dart';
-import '../comic/comic_image_tools_page.dart';
 import 'total_subscription_page.dart';
 import 'subscription_sync_page.dart';
 import 'tmdb_settings_page.dart';
@@ -46,8 +45,6 @@ import 'log_viewer_page.dart';
 import 'sandbox_settings_page.dart';
 import 'bangumi_settings_page.dart';
 import 'settings_ui.dart';
-import 'translation_languages_page.dart';
-
 import 'section_cache.dart';
 import 'usage_guide_page.dart';
 import '../media/audio_player_page.dart';
@@ -188,25 +185,6 @@ class SettingsPage extends StatelessWidget {
       title: '音频播放器',
       subtitle: '独立音频内核 · 后台与锁屏控制',
       onTap: () => _push(context, const AudioPlaybackSettingsPage()),
-    ),
-    SettingsEntryCard(
-      icon: Icons.auto_fix_high_outlined,
-      title: 'AI 图片超分与上色',
-      subtitle: '漫画 / 美图 AI 超分 · AI 上色 · waifu2x 模型管理',
-      onTap: () => _push(context, const ComicImageToolsSettingsPage()),
-    ),
-    SettingsEntryCard(
-      icon: Icons.translate,
-      title: '翻译语言包',
-      subtitle: '一次下载所有可用语言包 · 各个源共用',
-      onTap: () => _push(context, const TranslationLanguagesPage()),
-    ),
-    SettingsEntryCard(
-      icon: Icons.translate,
-      title: '全局翻译',
-      subtitle: '标题、搜索与漫画共用 · 系统 / AI / 自动补译',
-      onTap: () =>
-          _push(context, const ComicImageToolsSettingsPage(translation: true)),
     ),
 
     const SettingsGroupTitle('内容与订阅'),

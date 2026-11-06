@@ -19,7 +19,6 @@
 		E817B0010000000000000002 /* SpeechStream.swift in Sources */ = {isa = PBXBuildFile; fileRef = E817B0010000000000000001 /* SpeechStream.swift */; };
 		E817B0A10000000000000002 /* SourceRepositoryCredentials.swift in Sources */ = {isa = PBXBuildFile; fileRef = E817B0A10000000000000001 /* SourceRepositoryCredentials.swift */; };
 		AC0160160000000000000004 /* PrivacyController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0160160000000000000003 /* PrivacyController.swift */; };
-		AC0160160000000000000002 /* ComicImageToolsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0160160000000000000001 /* ComicImageToolsController.swift */; };
 		1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */ = {isa = PBXBuildFile; fileRef = 1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */; };
 		331C808B294A63AB00263BE5 /* RunnerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 331C807B294A618700263BE5 /* RunnerTests.swift */; };
 		3B3967161E833CAA004F5970 /* AppFrameworkInfo.plist in Resources */ = {isa = PBXBuildFile; fileRef = 3B3967151E833CAA004F5970 /* AppFrameworkInfo.plist */; };
@@ -76,7 +75,6 @@
 		E817B0010000000000000001 /* SpeechStream.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpeechStream.swift; sourceTree = "<group>"; };
 		E817B0A10000000000000001 /* SourceRepositoryCredentials.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceRepositoryCredentials.swift; sourceTree = "<group>"; };
 		AC0160160000000000000003 /* PrivacyController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyController.swift; sourceTree = "<group>"; };
-		AC0160160000000000000001 /* ComicImageToolsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComicImageToolsController.swift; sourceTree = "<group>"; };
 		1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = GeneratedPluginRegistrant.h; sourceTree = "<group>"; };
 		1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = GeneratedPluginRegistrant.m; sourceTree = "<group>"; };
 		331C807B294A618700263BE5 /* RunnerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunnerTests.swift; sourceTree = "<group>"; };
@@ -192,7 +190,6 @@
 				AA2010200000000000000003 /* LumePythonController.h */,
 				AC0160160000000000000006 /* LumeGlassBackdrop.swift */,
 				AC2026102200000000000002 /* LumeSystemTabBar.swift */,
-				AC0160160000000000000001 /* ComicImageToolsController.swift */,
 				AC0160160000000000000003 /* PrivacyController.swift */,
 				7884E8672EC3CC0400C636F2 /* SceneDelegate.swift */,
 				74858FAD1ED2DC5600515810 /* Runner-Bridging-Header.h */,
@@ -404,7 +401,6 @@
 				AA2010200000000000000001 /* LumePythonController.m in Sources */,
 				AC0160160000000000000005 /* LumeGlassBackdrop.swift in Sources */,
 				AC2026102200000000000001 /* LumeSystemTabBar.swift in Sources */,
-				AC0160160000000000000002 /* ComicImageToolsController.swift in Sources */,
 				AC0160160000000000000004 /* PrivacyController.swift in Sources */,
 				1498D2341E8E89220040F4C2 /* GeneratedPluginRegistrant.m in Sources */,
 				7884E8682EC3CC0700C636F2 /* SceneDelegate.swift in Sources */,

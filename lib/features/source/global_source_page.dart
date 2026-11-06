@@ -788,6 +788,9 @@ class _GlobalSourcePageState extends State<GlobalSourcePage> {
     }
 
     final visible = _filter == null ? Section.values : <Section>[_filter!];
+    // 提前把「板块表头 + 源卡片 + 网页源」摊平成一组懒加载闭包，
+    // 只在滚动到视口时才真正构建 Widget，避免一次性 build 数百个卡片。
+    final pageItems = _buildPageItems(visible);
     return Column(
       children: <Widget>[
         // 筛选条不是滚动视图，自己让出玻璃顶栏的高度。
@@ -859,61 +862,14 @@ class _GlobalSourcePageState extends State<GlobalSourcePage> {
             ),
           ),
         Expanded(
-          child: ListView(
-            // 尾部只留「页面节奏（24）+ 右下角 FAB 的净空（56）」：二级页底下没有
-            // Dock，96 那套会多出一截空白（用户口径：二级页底部不要多余留白）。
+          child: ListView.builder(
+            // 懒加载：只构建进入视口附近（含 cacheExtent）的条目
+            // ［板块表头 + 单个源卡片］，避免一次性 build 数百个卡片造成卡死/闪退。
+            // 条目高度随表头 / 说明 / 卡片变化，故不设固定 itemExtent，
+            // 依赖 builder 的视口裁剪即可达到目的。
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 80),
-            children: <Widget>[
-              if (_runtimeFilter != 'web')
-                for (final section in visible)
-                  ..._buildSectionChildren(section),
-              if ((_runtimeFilter == null || _runtimeFilter == 'web') &&
-                  (_filter == null || _filter == Section.video)) ...[
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: Text(
-                    '网页',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                  ),
-                ),
-                if (_webStore?.items.isEmpty ?? true)
-                  const _SectionNote('暂无网页源，可从视频源选择面板的 + 添加'),
-                for (final web in _webStore?.items ?? <WebHomeSource>[])
-                  ListTile(
-                    title: Text(web.name),
-                    subtitle: Text(web.url),
-                    onTap: () => Navigator.push<void>(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => WebHomePage(source: web),
-                      ),
-                    ),
-                    trailing: IconButton(
-                      tooltip: '删除网页源',
-                      icon: const Icon(Icons.delete_outline),
-                      onPressed: () async {
-                        final yes = await showGlassDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: Text('删除「${web.name}」？'),
-                            actions: [
-                              TextButton(
-                                onPressed: () => Navigator.pop(context, false),
-                                child: const Text('取消'),
-                              ),
-                              FilledButton(
-                                onPressed: () => Navigator.pop(context, true),
-                                child: const Text('删除'),
-                              ),
-                            ],
-                          ),
-                        );
-                        if (yes == true) _webStore?.remove(web.id);
-                      },
-                    ),
-                  ),
-              ],
-            ],
+            itemCount: pageItems.length,
+            itemBuilder: (context, index) => pageItems[index](),
           ),
         ),
       ],
@@ -955,76 +911,152 @@ class _GlobalSourcePageState extends State<GlobalSourcePage> {
     );
   }
 
-  List<Widget> _buildSectionChildren(Section section) {
-    final sources = _listOf(section);
-    return <Widget>[
-      Padding(
-        padding: const EdgeInsets.fromLTRB(4, 16, 0, 4),
-        child: Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                section.label,
-                style: TextStyle(
-                  fontSize: LumeTypography.sectionTitleSize,
-                  fontWeight: FontWeight.w600,
-                  color: LumeTheme.textPrimary,
-                ),
+  /// 把「板块表头 + 源卡片 + 网页源」摊平成一组**构建闭包**，供主列表
+  /// [ListView.builder] 懒加载使用：只有滚动到视口附近时才真正构建对应 Widget，
+  /// 避免一次性 build 数百个卡片导致卡死/闪退。
+  List<Widget Function()> _buildPageItems(List<Section> visible) {
+    final items = <Widget Function()>[];
+    if (_runtimeFilter != 'web') {
+      for (final section in visible) {
+        final sources = _listOf(section);
+        // 板块表头（名称 + 启用/总数 + 导入按钮）。
+        items.add(() => Padding(
+              padding: const EdgeInsets.fromLTRB(4, 16, 0, 4),
+              child: Row(
+                children: <Widget>[
+                  Expanded(
+                    child: Text(
+                      section.label,
+                      style: TextStyle(
+                        fontSize: LumeTypography.sectionTitleSize,
+                        fontWeight: FontWeight.w600,
+                        color: LumeTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                  Text(
+                    '启用 ${_enabledCount(section)} / 共 ${sources.length}',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: LumeTypography.descriptionSize,
+                      color: LumeTheme.descriptionColor,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '导入到${section.label}',
+                    icon: const LumeIcon(
+                      Icons.add,
+                      slot: 'global_source_page.6',
+                    ),
+                    onPressed: () => _import(target: section),
+                  ),
+                ],
               ),
-            ),
-            Text(
-              '启用 ${_enabledCount(section)} / 共 ${sources.length}',
-              style: TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: LumeTypography.descriptionSize,
-                color: LumeTheme.descriptionColor,
-              ),
-            ),
-            IconButton(
-              tooltip: '导入到${section.label}',
-              icon: const LumeIcon(Icons.add, slot: 'global_source_page.6'),
-              onPressed: () => _import(target: section),
-            ),
-          ],
-        ),
-      ),
-      if (_failed.contains(section))
-        const _SectionNote('该板块源存储不可用')
-      else if (sources.isEmpty)
-        const _SectionNote('暂无源'),
-      for (final source in sources)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Row(
-            children: [
-              if (_selecting)
-                Checkbox(
-                  key: ValueKey('global-select-${section.id}-${source.id}'),
-                  value: _selected.contains((section, source.id)),
-                  onChanged: (_) => setState(() {
-                    _selected.contains((section, source.id))
-                        ? _selected.remove((section, source.id))
-                        : _selected.add((section, source.id));
-                  }),
-                ),
-              Expanded(
-                child: _SourceTile(
-                  source: source,
-                  testing:
-                      _testing.contains(source.id) ||
-                      _refreshing.contains(source.id),
-                  testResult: _testResults[source.id],
-                  onToggle: (enabled) => _toggle(section, source, enabled),
-                  onBrowse: source.enabled
-                      ? () => _browse(section, source)
-                      : null,
-                  onDelete: () => _delete(section, source),
-                ),
-              ),
-            ],
+            ));
+        // 空板块 / 存储故障说明。
+        if (_failed.contains(section)) {
+          items.add(() => const _SectionNote('该板块源存储不可用'));
+        } else if (sources.isEmpty) {
+          items.add(() => const _SectionNote('暂无源'));
+        }
+        // 单个源卡片。
+        for (final source in sources) {
+          items.add(() => _sourceTileItem(section, source));
+        }
+      }
+    }
+    // 网页源（来自视频源选择面板 + 添加）。
+    if ((_runtimeFilter == null || _runtimeFilter == 'web') &&
+        (_filter == null || _filter == Section.video)) {
+      items.add(
+        () => const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: Text(
+            '网页',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
           ),
         ),
-    ];
+      );
+      if (_webStore?.items.isEmpty ?? true) {
+        items.add(
+          () => const _SectionNote('暂无网页源，可从视频源选择面板的 + 添加'),
+        );
+      }
+      for (final web in _webStore?.items ?? <WebHomeSource>[]) {
+        items.add(() => _webSourceTileItem(web));
+      }
+    }
+    return items;
+  }
+
+  /// 单个源卡片（含批量选择勾选框）。
+  Widget _sourceTileItem(Section section, SourceDescriptor source) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          if (_selecting)
+            Checkbox(
+              key: ValueKey('global-select-${section.id}-${source.id}'),
+              value: _selected.contains((section, source.id)),
+              onChanged: (_) => setState(() {
+                _selected.contains((section, source.id))
+                    ? _selected.remove((section, source.id))
+                    : _selected.add((section, source.id));
+              }),
+            ),
+          Expanded(
+            child: _SourceTile(
+              source: source,
+              testing:
+                  _testing.contains(source.id) ||
+                  _refreshing.contains(source.id),
+              testResult: _testResults[source.id],
+              onToggle: (enabled) => _toggle(section, source, enabled),
+              onBrowse: source.enabled ? () => _browse(section, source) : null,
+              onDelete: () => _delete(section, source),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// 单个网页源条目。
+  Widget _webSourceTileItem(WebHomeSource web) {
+    return ListTile(
+      title: Text(web.name),
+      subtitle: Text(web.url),
+      onTap: () => Navigator.push<void>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => WebHomePage(source: web),
+        ),
+      ),
+      trailing: IconButton(
+        tooltip: '删除网页源',
+        icon: const Icon(Icons.delete_outline),
+        onPressed: () async {
+          final yes = await showGlassDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: Text('删除「${web.name}」？'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('取消'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('删除'),
+                ),
+              ],
+            ),
+          );
+          if (yes == true) _webStore?.remove(web.id);
+        },
+      ),
+    );
   }
 }
 

@@ -1,4 +1,3 @@
-import '../../shared/widgets/source_translation.dart';
 import '../../core/source/source_labels.dart';
 
 import 'package:lume_box/shared/widgets/lume_icon.dart';
@@ -322,15 +321,6 @@ class _BrowseViewState extends State<BrowseView> {
             ),
           ),
         ),
-        Align(
-          alignment: Alignment.centerRight,
-          child: SourceTranslationAction(
-            texts: [
-              ..._items.map((item) => item.title),
-              ..._categories.map((category) => category.title),
-            ],
-          ),
-        ),
         _buildCategories(),
         Expanded(child: _buildBody()),
       ],
@@ -433,7 +423,7 @@ class _BrowseViewState extends State<BrowseView> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: <Widget>[
-                        SourceText(
+                        Text(
                           item.title,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -536,7 +526,7 @@ class _CategoryChip extends StatelessWidget {
         radius: 14,
         onTap: onTap,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        child: SourceText(
+        child: Text(
           label,
           style: TextStyle(
             fontSize: LumeTypography.bodySize,

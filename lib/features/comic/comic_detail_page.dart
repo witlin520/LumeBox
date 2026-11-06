@@ -7,7 +7,6 @@ import 'dart:async';
 
 import '../../core/source/source_picker_groups.dart';
 import '../../shared/widgets/native_glass_surfaces.dart';
-import '../../shared/widgets/source_translation.dart';
 import '../../shared/widgets/network_owned_state.dart';
 
 import 'package:lume_box/shared/widgets/lume_icon.dart';
@@ -18,7 +17,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../core/reading/reading.dart';
-import '../../core/reading/comic_image_tools.dart';
 import '../../core/reading/chapter_display_order.dart';
 import '../../core/session/section.dart';
 import '../../core/source/source.dart';
@@ -80,8 +78,7 @@ class _ComicDetailPageState extends State<ComicDetailPage>
         maxConcurrent: SectionImagePipeline.coverConcurrency,
         // 漫画板块的图片缓存已按用户要求关闭（不读盘也不落盘）。
         diskCache: SectionImagePipeline.diskCacheFor(Section.comic),
-        decodeTransform: (bytes) =>
-            automaticUpscale(bytes, UpscaleSurface.cover),
+        decodeTransform: (bytes) => bytes,
       );
 
   Widget? _typedDetail;
@@ -599,7 +596,7 @@ class _ComicDetailPageState extends State<ComicDetailPage>
     final info = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        SourceText(
+        Text(
           detail?.title ?? widget.target.title,
           maxLines: 3,
           overflow: TextOverflow.ellipsis,
@@ -753,12 +750,6 @@ class _ComicDetailPageState extends State<ComicDetailPage>
                 icon: Icon(_onShelf ? Icons.bookmark : Icons.bookmark_border),
               ),
               const SizedBox(width: 4),
-              SourceTranslationAction(
-                texts: [
-                  detail?.title ?? widget.target.title,
-                  if (detail?.description != null) detail!.description!,
-                ],
-              ),
             ],
           ),
           if (_progress != null)
@@ -809,7 +800,7 @@ class _ComicDetailPageState extends State<ComicDetailPage>
             key: const Key('comic-detail-description'),
             onTap: () =>
                 setState(() => _descriptionExpanded = !_descriptionExpanded),
-            child: SourceText(
+            child: Text(
               description,
               maxLines: _descriptionExpanded ? null : 2,
               overflow: _descriptionExpanded ? null : TextOverflow.ellipsis,
@@ -1319,7 +1310,7 @@ class _ComicDetailPageState extends State<ComicDetailPage>
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        SourceText(
+                        Text(
                           detail?.title ?? widget.target.title,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
@@ -1379,7 +1370,7 @@ class _ComicDetailPageState extends State<ComicDetailPage>
                   pipeline: _pipeline,
                   url: detail?.cover ?? widget.target.cover,
                 ),
-                child: const Text('图片信息 / 超分状态'),
+                child: const Text('图片信息'),
               ),
               Row(
                 children: <Widget>[
@@ -1400,12 +1391,6 @@ class _ComicDetailPageState extends State<ComicDetailPage>
                     child: Text(_onShelf ? '移出书架' : '加入书架'),
                   ),
                   const SizedBox(width: 4),
-                  SourceTranslationAction(
-                    texts: [
-                      detail?.title ?? widget.target.title,
-                      if (detail?.description != null) detail!.description!,
-                    ],
-                  ),
                 ],
               ),
             ],
@@ -1469,7 +1454,7 @@ class _ComicDetailPageState extends State<ComicDetailPage>
           children: [
             const Text('简介', style: TextStyle(fontWeight: FontWeight.w600)),
             const SizedBox(height: 6),
-            SourceText(
+            Text(
               description,
               maxLines: _descriptionExpanded ? null : 2,
               overflow: _descriptionExpanded

@@ -2,7 +2,6 @@ import 'package:lume_box/shared/widgets/lume_icon.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/reading/reading.dart';
-import '../../core/reading/comic_image_tools.dart';
 import '../../core/session/section.dart';
 import '../../core/source/source.dart';
 import '../../core/util/lume_log.dart';
@@ -99,8 +98,7 @@ class _ComicPageState extends State<ComicPage> {
           // 漫画板块的图片缓存已按用户要求关闭：不读盘也不落盘
           // （见 SectionImagePipeline.diskCache 的说明）。
           diskCache: SectionImagePipeline.diskCacheFor(Section.comic),
-          decodeTransform: (bytes) =>
-              automaticUpscale(bytes, UpscaleSurface.cover),
+          decodeTransform: (bytes) => bytes,
         );
       });
     } catch (error, stackTrace) {

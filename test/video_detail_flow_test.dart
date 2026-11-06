@@ -9,11 +9,9 @@ import 'dart:async';
 
 import 'package:lume_box/core/net/network_queue.dart';
 import 'package:image/image.dart' as img;
-import 'package:lume_box/core/reading/comic_image_tools.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:lume_box/shared/widgets/source_translation.dart';
 import 'package:lume_box/core/tmdb/tmdb.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -406,87 +404,6 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('全部超分范围开启且海报仍在处理中，详情选集和播放不等待超分', (tester) async {
-    final started = Completer<void>(), finish = Completer<void>();
-    final messenger =
-        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
-    ComicImageTools.debugAutomaticSupported = true;
-    messenger.setMockMethodCallHandler(ComicImageTools.channel, (call) async {
-      if (call.method == 'superResolve') {
-        if (!started.isCompleted) started.complete();
-        await finish.future;
-        return (call.arguments as Map)['bytes'];
-      }
-      return null;
-    });
-    final tools = ComicImageTools(
-      settings: ComicImageToolsSettings()
-        ..automatic = true
-        ..upscaleCovers = true
-        ..upscaleVideoPosters = true
-        ..concurrency = 1,
-    );
-    final png = img.encodePng(
-      img.Image(width: 4, height: 8)..setPixelRgb(0, 0, 30, 150, 200),
-    );
-    final pipeline = SectionImagePipeline(
-      cacheDir: library.imageCacheDir,
-      diskCache: false,
-      requestSender: (_) async => NetworkResponse(
-        statusCode: 200,
-        body: png,
-        headers: const {'content-type': 'image/png'},
-      ),
-      decodeTransform: (bytes) =>
-          tools.automatic(bytes, surface: UpscaleSurface.videoPoster),
-    );
-    addTearDown(() {
-      if (!finish.isCompleted) finish.complete();
-      tools.dispose();
-      pipeline.dispose();
-      ComicImageTools.debugAutomaticSupported = null;
-      messenger.setMockMethodCallHandler(ComicImageTools.channel, null);
-    });
-    var opened = 0;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: VideoDetailPage(
-          source: source,
-          item: const SourceItem(
-            id: 'movie',
-            title: '详情测试片',
-            cover: 'https://fixture.example/poster.png',
-          ),
-          library: library,
-          imagePipeline: pipeline,
-          onPlay: (_, _, _, _) async {
-            opened++;
-          },
-        ),
-      ),
-    );
-    await tester.pump(const Duration(milliseconds: 500));
-    await tester.runAsync(
-      () => started.future.timeout(const Duration(seconds: 5)),
-    );
-    await tester.pump(const Duration(milliseconds: 500));
-    final dynamic state = tester.state(find.byType(VideoDetailPage));
-    expect(state.loading, false);
-    expect(state.chapters, hasLength(2));
-    expect(source.parses, 0);
-    final play = find.byKey(const Key('video-detail-play'));
-    await tester.ensureVisible(play);
-    await tester.runAsync(() async {
-      await tester.tap(play);
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-    });
-    expect(opened, 1, reason: '不能等待海报超分完成才能播放');
-    expect(source.parses, 1);
-    expect(finish.isCompleted, false);
-    finish.complete();
-    await tester.pumpAndSettle();
-    expect(tester.takeException(), isNull);
-  });
   testWidgets('网页47集详情保留目录并从网页选中的第12集开始播放', (tester) async {
     final web = DirectVideoSource(
       id: 'web',
@@ -579,10 +496,10 @@ void main() {
     expect(find.text('选集 · 共 2 集'), findsNothing);
     expect(
       tester
-          .widget<SourceText>(
+          .widget<Text>(
             find.descendant(
               of: find.byKey(const Key('video-detail-summary')),
-              matching: find.byType(SourceText),
+              matching: find.byType(Text),
             ),
           )
           .maxLines,

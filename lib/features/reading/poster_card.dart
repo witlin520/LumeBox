@@ -1,5 +1,3 @@
-import '../../shared/widgets/source_translation.dart';
-
 import 'package:lume_box/shared/widgets/lume_icon.dart';
 
 import '../../shared/widgets/missing_cover.dart';
@@ -12,7 +10,6 @@ import 'package:flutter/services.dart';
 
 import '../../core/reading/browse_layout.dart';
 import '../../core/reading/reading.dart';
-import '../../core/reading/comic_image_tools.dart';
 import '../../core/source/source.dart';
 import '../../core/theme/lume_theme.dart';
 import 'section_image.dart';
@@ -27,25 +24,20 @@ Future<void> showImageProcessingInfo(
   BuildContext context, {
   required SectionImagePipeline pipeline,
   required String? url,
-  UpscaleSurface surface = UpscaleSurface.cover,
   String origin = '源站封面',
 }) => showDialog<void>(
   context: context,
   builder: (context) => AlertDialog(
-    title: const Text('图片信息 / 超分状态'),
+    title: const Text('图片信息'),
     content: ValueListenableBuilder<int>(
       valueListenable: pipeline.processingRevision,
       builder: (_, _, _) {
         final report = url == null ? null : pipeline.processingReport(url);
-        final enabled = ComicImageTools.shared.surfaceEnabled(surface);
         return Text(
           '$origin\n${report?.summary ?? (url == null || url.isEmpty
                   ? '没有可用图片'
-                  : enabled
-                  ? '尚无处理结果，图片可能正在加载或处理。已缓存图片可重新打开后查看。'
-                  : '未开启自动超分或此范围，显示原图。')}\n\n'
-          '只调整图片清晰度，不改变作品资料、TMDB 匹配或播放地址。'
-          '达到宽度阈值会跳过；前后尺寸翻倍表示设备已执行超分。',
+                  : '暂无处理结果。')}\n\n'
+          '只调整图片清晰度，不改变作品资料、TMDB 匹配或播放地址。',
         );
       },
     ),
@@ -343,7 +335,7 @@ class ShelfEmptyHint extends StatelessWidget {
               color: LumeTheme.muted,
             ),
             const SizedBox(height: 12),
-            SourceText(
+            Text(
               title,
               style: TextStyle(
                 fontSize: LumeTypography.titleSize,
@@ -386,7 +378,7 @@ class PosterTitle extends StatelessWidget {
     height: 26,
     child: Align(
       alignment: overlay ? Alignment.bottomLeft : Alignment.topLeft,
-      child: SourceText(
+      child: Text(
         title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
@@ -621,7 +613,7 @@ class CompactSourceItemTile extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    SourceText(
+                    Text(
                       item.title,
                       maxLines: columns > 1 ? 1 : 2,
                       overflow: TextOverflow.ellipsis,

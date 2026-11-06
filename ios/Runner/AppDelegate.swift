@@ -1,6 +1,7 @@
 import Flutter
 import UIKit
 import Security
+import AVFoundation
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -26,10 +27,10 @@ import Security
   private let battery = BatteryController()
   private let configurationExport = ConfigurationExportController()
   private let videoMerge = OfflineVideoMergeController()
-  private let comicImages = ComicImageToolsController()
   private let privacy = PrivacyController()
   private let introRecognition = IntroRecognitionController()
   private let referenceCredentials = ReferenceDanmakuCredentialsController()
+  private let downloadKeepAlive = DownloadKeepAliveController()
 
   override func application(
     _ application: UIApplication,
@@ -109,9 +110,6 @@ import Security
       .registrar(forPlugin: "LumeBoxBattery")?.messenger() {
       battery.register(with: messenger)
     }
-    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "LumeBoxComicImages") {
-      comicImages.register(with: registrar)
-    }
     if let messenger = engineBridge.pluginRegistry.registrar(forPlugin: "LumeBoxPrivacy")?.messenger() {
       privacy.register(with: messenger)
     }
@@ -152,6 +150,14 @@ import Security
           channel?.invokeMethod("changed", arguments: flags())
         }
       }
+    }
+
+    // 后台/锁屏下载保活通道：下载队列活动期间播放静音循环音频，App 凭
+    // `UIBackgroundModes=audio` 锁屏后不被挂起。与 Dart 侧
+    // `DownloadKeepAlive` 的契约一一对应。
+    if let messenger = engineBridge.pluginRegistry
+      .registrar(forPlugin: "LumeBoxDownloadKeepAlive")?.messenger() {
+      downloadKeepAlive.register(with: messenger)
     }
   }
 }
@@ -262,4 +268,100 @@ private final class ConfigurationExportController: NSObject, UIDocumentPickerDel
   }
   func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) { finish(!urls.isEmpty) }
   func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) { finish(false) }
+}
+
+/// 后台/锁屏下载保活：队列活动期间播放一段静音循环音频。
+///
+/// `VideoDownloadCenter` 的下载是纯 Dart 的 `HttpClient` 写盘，跑在 Dart isolate 里；
+/// 一锁屏 iOS 就把 App 挂起，下载随之冻结。这里让音频会话处于 `.playback` 播放态，
+/// 配合 `Info.plist` 的 `UIBackgroundModes=audio`，App 锁屏后不被系统挂起，下载器
+/// 就能继续。同时用 `beginBackgroundTask` 兜底争取一次性后台时间，队列空了由
+/// `stop()` 停掉并结束后台任务。
+private final class DownloadKeepAliveController: NSObject {
+  private var player: AVAudioPlayer?
+  private var task: UIBackgroundTaskIdentifier = .invalid
+
+  func register(with messenger: FlutterBinaryMessenger) {
+    FlutterMethodChannel(name: "lumebox/download_keepalive", binaryMessenger: messenger)
+      .setMethodCallHandler { [weak self] call, result in
+        guard let self = self else { result(nil); return }
+        switch call.method {
+        case "start":
+          self.start()
+          result(nil)
+        case "stop":
+          self.stop()
+          result(nil)
+        default:
+          result(FlutterMethodNotImplemented)
+        }
+      }
+  }
+
+  private func start() {
+    guard player == nil else { return }
+    if task == .invalid {
+      task = UIApplication.shared.beginBackgroundTask(withName: "lumebox.download") { [weak self] in
+        self?.endTask()
+      }
+    }
+    do {
+      let session = AVAudioSession.sharedInstance()
+      try session.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])
+      try session.setActive(true)
+      guard let data = Self.silenceData(), let p = try? AVAudioPlayer(data: data) else { return }
+      p.numberOfLoops = -1
+      p.volume = 1.0
+      p.prepareToPlay()
+      p.play()
+      player = p
+    } catch {
+      // 音频会话不可用时静默降级：只是锁屏后下载可能停，不阻断下载本身。
+    }
+  }
+
+  private func stop() {
+    player?.stop()
+    player = nil
+    endTask()
+    try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+  }
+
+  private func endTask() {
+    if task != .invalid {
+      UIApplication.shared.endBackgroundTask(task)
+      task = .invalid
+    }
+  }
+
+  /// 生成 1 秒 8 kHz 16-bit 单声道静音的合法 WAV 数据（避开 bundle 资产依赖）。
+  private static func silenceData() -> Data? {
+    let sampleRate: UInt32 = 8000
+    let bitsPerSample: UInt16 = 16
+    let channels: UInt16 = 1
+    let blockAlign = channels * bitsPerSample / 8
+    let byteRate = sampleRate * UInt32(blockAlign)
+    let dataSize = UInt32(sampleRate) * UInt32(blockAlign)
+
+    var header = Data()
+    header.append(contentsOf: Array("RIFF".utf8))
+    append(UInt32(36) + dataSize, to: &header)
+    header.append(contentsOf: Array("WAVE".utf8))
+    header.append(contentsOf: Array("fmt ".utf8))
+    append(UInt32(16), to: &header) // fmt chunk size
+    append(UInt16(1), to: &header) // PCM
+    append(channels, to: &header)
+    append(sampleRate, to: &header)
+    append(byteRate, to: &header)
+    append(blockAlign, to: &header)
+    append(bitsPerSample, to: &header)
+    header.append(contentsOf: Array("data".utf8))
+    append(dataSize, to: &header)
+    return header + Data(repeating: 0, count: Int(dataSize))
+  }
+
+  private static func append<T: FixedWidthInteger>(_ value: T, to data: inout Data) {
+    var le = value.littleEndian
+    withUnsafeBytes(of: &le) { data.append(contentsOf: $0) }
+  }
 }

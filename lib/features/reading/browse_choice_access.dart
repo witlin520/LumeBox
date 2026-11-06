@@ -1,4 +1,3 @@
-import '../../shared/widgets/source_translation.dart';
 import '../../core/source/source_labels.dart';
 
 import 'package:lume_box/shared/widgets/lume_icon.dart';
@@ -20,7 +19,7 @@ ChoiceChip _filterChip({
   required bool selected,
   required ValueChanged<bool> onSelected,
 }) => ChoiceChip(
-  label: SourceText(
+  label: Text(
     label,
     style: TextStyle(color: selected ? Colors.white : _filterIdleForeground),
   ),
@@ -227,7 +226,7 @@ class _ChoiceSheetState extends State<_ChoiceSheet> {
                             context,
                             _Choice(all ? null : option.id),
                           ),
-                          child: SourceText(
+                          child: Text(
                             sourceLabel(option.title),
                             style: TextStyle(
                               color: selected
