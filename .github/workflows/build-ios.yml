@@ -91,8 +91,19 @@ jobs:
       - name: 环境版本
         run: flutter --version
 
-      - name: 拉取依赖
-        run: flutter pub get --enforce-lockfile
+      - name: 拉取依赖（镜像源偶发 5xx/超时，自动重试）
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if flutter pub get --enforce-lockfile; then
+              echo "依赖拉取成功（第 $attempt 次尝试）"
+              exit 0
+            fi
+            echo "依赖拉取失败（第 $attempt/4 次），15 秒后重试…"
+            sleep 15
+          done
+          echo "依赖拉取在 4 次尝试后仍失败"
+          exit 1
 
       - name: 检查播放器原生通道（匹配插件 iOS 18 最低目标）
         run: bash tool/check_ios_player_presentation.sh
