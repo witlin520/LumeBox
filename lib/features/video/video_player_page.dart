@@ -996,7 +996,7 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       final error = snapshot.error!.toLowerCase();
       if (!_rangeFallbackAttempted &&
           _settings.kernel == PlayerKernel.avplayer &&
-          _catalog.isAvailable(PlayerKernel.mpv) &&
+          _catalog.isAvailable(PlayerKernel.mdk) &&
           (error.contains('-12939') ||
               error.contains('byte range and no content length') ||
               error.contains('服务器不支持分段请求') ||
@@ -1005,8 +1005,8 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
         // 快照通知期间不能同步释放发出通知的播放器。
         scheduleMicrotask(() async {
           if (!mounted || _settings.kernel != PlayerKernel.avplayer) return;
-          _showToast('当前媒体的分段响应与 AVPlayer 不兼容，正在切换 MPV');
-          await _applySettings(_settings.copyWith(kernel: PlayerKernel.mpv));
+          _showToast('当前媒体的分段响应与 AVPlayer 不兼容，正在切换 MDK');
+          await _applySettings(_settings.copyWith(kernel: PlayerKernel.mdk));
           if (mounted) await _player?.play();
         });
       }
@@ -1207,14 +1207,16 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
     if (!mounted) return;
     // 离线合并/直下的本地 MP4（localPath 非空）：AVFoundation（AVPlayer）对
     // ffmpeg stream-copy remux 产物在真机上起播偶发失败（QuickLook 预览走更
-    // 宽容路径所以能播），而 MPV/MDK 兼容更好、已被手动验证可播。默认内核为
-    // AVPlayer 时切到 MPV，让「合并后离线播放」开箱即播；若用户显式选了其它
-    // 内核（如 MDK）则保留不动。
+    // 宽容路径所以能播）。MDK（libmdk，ffmpeg 系）兼容最好、已被手动验证可播
+    // 且有声音；而 MPV（media_kit/libmpv）在本 App 音频环境里会报
+    // 「Could not open/initialize audio device」（多个组件抢 AVAudioSession），
+    // 因此默认内核为 AVPlayer 时一律切到 MDK，让「合并后离线播放」开箱即播；
+    // 若用户显式选了其它内核则保留不动。
     final bootMedia = widget.media;
     if (bootMedia?.localPath != null &&
         _settings.kernel == PlayerKernel.avplayer &&
-        PlayerFactory.isAvailable(PlayerKernel.mpv)) {
-      _settings = _settings.copyWith(kernel: PlayerKernel.mpv);
+        PlayerFactory.isAvailable(PlayerKernel.mdk)) {
+      _settings = _settings.copyWith(kernel: PlayerKernel.mdk);
     }
     _session = PipSession(
       backend: widget.pipBackend ?? createPlatformPipBackend(),
