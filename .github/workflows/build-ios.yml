@@ -74,8 +74,10 @@ jobs:
     runs-on: macos-latest
     timeout-minutes: 60
     env:
-      # Match the checked-in lockfile source and exact tested versions.
-      PUB_HOSTED_URL: https://pub.flutter-io.cn
+      # 用官方 pub.dev（2026-11-09 起）：镜像 pub.flutter-io.cn 对部分包返回 502
+      # 损坏产物，导致 content-hash 校验失败。锁文件哈希本就是 canonical 的，
+      # 切回 pub.dev 即可稳定拉取。
+      PUB_HOSTED_URL: https://pub.dev
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
