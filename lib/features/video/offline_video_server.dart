@@ -27,6 +27,16 @@ class OfflineVideoServer {
     port: _server.port,
     path: '/$_token/index.m3u8',
   );
+
+  /// 用同一个回环服务器播放目录内任意文件（如合并后的 `merged.mp4`）。
+  /// 走 HTTP 而非 `file://`，可规避 iOS 沙盒路径含空格（`Application Support`）、
+  /// 以及不同播放器内核对 `file://` 支持不一的问题。
+  Uri fileUri(String name) => Uri(
+    scheme: 'http',
+    host: '127.0.0.1',
+    port: _server.port,
+    path: '/$_token/$name',
+  );
   Future<void> close() => _server.close(force: true);
   Future<void> _serve(HttpRequest request) async {
     try {

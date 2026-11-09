@@ -94,11 +94,13 @@ class _DownloadCenterPageState extends State<DownloadCenterPage> {
     if (!await file.exists()) throw StateError('本地文件不存在，请重新下载');
     OfflineVideoServer? server;
     try {
-      final uri = task.fileName.endsWith('.m3u8')
-          ? (server = await OfflineVideoServer.open(
-              Directory(videos.folder(task)),
-            )).uri
-          : file.uri;
+      // 合并后的 MP4 也走同一个回环 HTTP 服务器播放，而非 file://：
+      // iOS 沙盒路径（getApplicationSupportDirectory）含空格（Application Support），
+      // 且不同播放器内核（AVPlayer/MPV/MDK）对 file:// 的支持不一，容易放不出来。
+      // 用 HTTP 与可用的离线 HLS 播放走完全一致的通道。
+      final uri = (server = await OfflineVideoServer.open(
+        Directory(videos.folder(task)),
+      )).fileUri(task.fileName);
       if (!mounted) return;
       final media = PlayerMedia(
         uri: uri,
