@@ -69,6 +69,10 @@ class VideoDownloadMerger {
 
   /// iOS 合并：使用内嵌 FFmpeg（ffmpeg_kit_flutter_new，含 crypto 协议）直接合并 AES-128
   /// HLS。原生 Aether 库缺 mp4/mov muxer，已完全废弃，不再回退。
+  ///
+  /// 必须用 `executeWithArguments`（而非 `execute(String)`）：后者按空格重新拆分命令串，
+  /// iOS 容器路径常含空格（如 `Library/Application Support/...`），会被拆坏导致
+  /// `No such file or directory`。参数数组原样传给原生层即可。
   Future<void> _mergeIOS(Directory directory, File output, String id) async {
     final args = [
       '-hide_banner',
@@ -95,8 +99,8 @@ class VideoDownloadMerger {
       '-f',
       'mp4',
       output.path,
-    ].join(' ');
-    final session = await FFmpegKit.execute(args);
+    ];
+    final session = await FFmpegKit.executeWithArguments(args);
     _ffmpegSessions[id] = session;
     final rc = await session.getReturnCode();
     _ffmpegSessions.remove(id);
