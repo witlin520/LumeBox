@@ -1205,6 +1205,17 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       return;
     }
     if (!mounted) return;
+    // 离线合并/直下的本地 MP4（localPath 非空）：AVFoundation（AVPlayer）对
+    // ffmpeg stream-copy remux 产物在真机上起播偶发失败（QuickLook 预览走更
+    // 宽容路径所以能播），而 MPV/MDK 兼容更好、已被手动验证可播。默认内核为
+    // AVPlayer 时切到 MPV，让「合并后离线播放」开箱即播；若用户显式选了其它
+    // 内核（如 MDK）则保留不动。
+    final bootMedia = widget.media;
+    if (bootMedia?.localPath != null &&
+        _settings.kernel == PlayerKernel.avplayer &&
+        PlayerFactory.isAvailable(PlayerKernel.mpv)) {
+      _settings = _settings.copyWith(kernel: PlayerKernel.mpv);
+    }
     _session = PipSession(
       backend: widget.pipBackend ?? createPlatformPipBackend(),
       canEnter: () =>
