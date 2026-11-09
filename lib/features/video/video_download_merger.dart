@@ -87,6 +87,8 @@ class VideoDownloadMerger {
       '-allowed_extensions',
       'ALL',
       // 输入侧强制重建 PTS：HLS 的 TS 分片间时间戳常有累积误差/跳变。
+      // （合并保持视频无损 copy：用户明确「改回无损」——不重编码、合并快。
+      //   离线合并文件由 MDK 内核播放，已修复画面放大。）
       '-fflags',
       '+genpts',
       '-i',
@@ -95,19 +97,8 @@ class VideoDownloadMerger {
       '0:v:0',
       '-map',
       '0:a?',
-      // 视频**转码**为 H.264：`-c copy` 保留的 TS 时间戳随容器写入 MP4 后，
-      // AVFoundation 的严格解析器会拒绝起播（-12178 / CSSStatusErrorDomain），
-      // 而 QuickLook 较宽松能播——所以 copy 系（含音频转 AAC、+genpts）救不了。
-      // 转码把 bitstream 重新序列化成干净的时间轴，是 iOS 上被反复验证的可靠解法。
-      // ffmpeg_kit_flutter_new 是 Full GPL 构建，自带 libx264。
       '-c:v',
-      'libx264',
-      '-preset',
-      'veryfast',
-      '-crf',
-      '23',
-      '-pix_fmt',
-      'yuv420p',
+      'copy',
       '-c:a',
       'aac',
       '-b:a',
