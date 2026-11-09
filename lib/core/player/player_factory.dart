@@ -55,7 +55,10 @@ class PlayerFactory {
   static bool isAvailable(PlayerKernel kernel) => switch (kernel) {
     // iOS 是主力平台：AVPlayer 与 MPV 都已接入（MPV 的原生库随 iOS 打包）。
     PlayerKernel.avplayer => Platform.isIOS,
-    PlayerKernel.aether => Platform.isIOS,
+    // AetherEngine（第三方 LGPL 框架）在真机加载「回环 HTTP / 本地离线 MP4」时
+    // 会直接闪退（其内部 FFmpeg + 原生显示层对这类 URL 不稳定）。先停用，避免
+    // 用户切到它就崩溃。AVPlayer 已覆盖原生播放（含 HDR platformView）。
+    PlayerKernel.aether => false,
     // MPV 初始化失败过：本次运行不再提供（逃生入口仍可切回 AVPlayer）。
     PlayerKernel.mpv => Platform.isIOS && !_mpvInitFailed,
     // MDK：原生库（libmdk）随 fvp 打包进 iOS；初始化失败过则本次不再提供。
@@ -85,6 +88,9 @@ class PlayerFactory {
     }
     if (kernel == PlayerKernel.mpv && _mpvInitFailed) {
       return 'MPV 初始化失败（本次运行已自动回退 AVPlayer）';
+    }
+    if (kernel == PlayerKernel.aether) {
+      return 'AetherEngine 已停用：真机加载本地离线 MP4 会闪退（第三方库内部问题），请使用 AVPlayer / MPV / MDK';
     }
     return '${kernel.label} 内核当前仅在 iOS 提供（Android / Windows 仅骨架）';
   }

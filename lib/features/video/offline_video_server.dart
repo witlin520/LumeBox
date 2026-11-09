@@ -74,19 +74,36 @@ class OfflineVideoServer {
       var start = 0, end = length - 1;
       final range = request.headers.value('range');
       if (range != null) {
-        final match = RegExp(r'^bytes=(\d+)-(\d*)$').firstMatch(range);
-        if (match == null) {
+        // 只处理单段 Range；多段（bytes=A-B,C-D）按标准返回 416。
+        // 同时支持：bytes=A-B / bytes=A- / bytes=-N（后缀，取末 N 字节）。
+        // AVFoundation 读取尾部 moov 时可能用到后缀 Range，漏掉会 416 导致放不动。
+        final suffix = RegExp(r'^bytes=-(\d+)$').firstMatch(range);
+        final single = RegExp(r'^bytes=(\d+)-(\d*)$').firstMatch(range);
+        if (suffix != null) {
+          final count = int.parse(suffix.group(1)!);
+          if (count <= 0 || length == 0) {
+            request.response.statusCode = 416;
+            request.response.headers.set('Content-Range', 'bytes */$length');
+            return;
+          }
+          // 取末 count 字节；超过全长大小时按整文件处理。
+          final take = count < length ? count : length;
+          start = length - take;
+          end = length - 1;
+        } else if (single != null) {
+          start = int.parse(single.group(1)!);
+          end = single.group(2)!.isEmpty ? end : int.parse(single.group(2)!);
+        } else {
           request.response.statusCode = 416;
+          request.response.headers.set('Content-Range', 'bytes */$length');
           return;
         }
-        start = int.parse(match.group(1)!);
-        end = match.group(2)!.isEmpty ? end : int.parse(match.group(2)!);
         if (start >= length || end < start) {
           request.response.statusCode = 416;
           request.response.headers.set('Content-Range', 'bytes */$length');
           return;
         }
-        end = end.clamp(start, length - 1);
+        if (end > length - 1) end = length - 1;
         request.response.statusCode = 206;
         request.response.headers.set(
           'Content-Range',

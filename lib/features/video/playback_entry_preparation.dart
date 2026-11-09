@@ -39,6 +39,7 @@ Future<void> preparePlaybackEntry(
       uri: media.uri,
       title: media.title,
       headers: headers,
+      localPath: media.localPath,
     ),
   );
 }

@@ -1510,7 +1510,12 @@ class _VideoPlayerPageState extends State<VideoPlayerPage>
       try {
         _firstFrameWatch = loadWatch;
         await player.load(
-          PlayerMedia(uri: media.uri, title: media.title, headers: headers),
+          PlayerMedia(
+            uri: media.uri,
+            title: media.title,
+            headers: headers,
+            localPath: media.localPath,
+          ),
         );
       } catch (error) {
         PlaybackDiagnostics.record(

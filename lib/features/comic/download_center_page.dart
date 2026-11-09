@@ -94,17 +94,22 @@ class _DownloadCenterPageState extends State<DownloadCenterPage> {
     if (!await file.exists()) throw StateError('本地文件不存在，请重新下载');
     OfflineVideoServer? server;
     try {
-      // 合并后的 MP4 也走同一个回环 HTTP 服务器播放，而非 file://：
-      // iOS 沙盒路径（getApplicationSupportDirectory）含空格（Application Support），
-      // 且不同播放器内核（AVPlayer/MPV/MDK）对 file:// 的支持不一，容易放不出来。
-      // 用 HTTP 与可用的离线 HLS 播放走完全一致的通道。
+      // 用一个会话级回环 HTTP 服务器承载离线文件：MPV / MDK 内核经它拉取，
+      // 因为 iOS 沙盒路径（getApplicationSupportDirectory）含空格（Application
+      // Support），而这两套 FFmpeg 内核对 file:// 含空格路径支持不一。
+      // AVPlayer 内核则改用下方 [localPath] 的本地文件播放（同导出后系统
+      // QuickLook 的路径，最稳），见 [PlayerMedia.localPath] 说明。
       final uri = (server = await OfflineVideoServer.open(
         Directory(videos.folder(task)),
       )).fileUri(task.fileName);
       if (!mounted) return;
+      // 合并/直下 MP4 额外带上沙盒内的真实路径，供 AVPlayer 内核以本地文件播放
+      // （见 [PlayerMedia.localPath]）。HLS 播放列表（.m3u8）需分段拉流，不能带。
+      final localPath = task.fileName.endsWith('.m3u8') ? null : file.path;
       final media = PlayerMedia(
         uri: uri,
         title: '${task.title} · ${task.chapterTitle}',
+        localPath: localPath,
       );
       final prepared = await preparePlaybackRoute(
         media,

@@ -223,29 +223,35 @@ class AvPlayer extends AbstractPlayer implements PresentationEngine {
     if (generation != _loadGeneration) return;
     await _releaseController();
     if (_disposed || generation != _loadGeneration) return;
-    final controller = media.isNetwork
-        ? VideoPlayerController.networkUrl(
-            uri,
-            httpHeaders: media.headers ?? const <String, String>{},
-            viewType: _settings.presentation.wantsHdr
-                ? VideoViewType.platformView
-                : VideoViewType.textureView,
-            // 后台音频继续播放：切到后台时画面停、声音不停（用户在听内容）。
-            // `allowBackgroundPlayback` 是插件暴露的唯一后台开关，它顺带把
-            // 音画会话设成播放类，与另一条原生通道（锁屏控制）配合工作。
-            videoPlayerOptions: VideoPlayerOptions(
-              allowBackgroundPlayback: true,
-            ),
-          )
-        : VideoPlayerController.file(
-            File.fromUri(media.uri),
-            viewType: _settings.presentation.wantsHdr
-                ? VideoViewType.platformView
-                : VideoViewType.textureView,
-            videoPlayerOptions: VideoPlayerOptions(
-              allowBackgroundPlayback: true,
-            ),
-          );
+    final viewType = _settings.presentation.wantsHdr
+        ? VideoViewType.platformView
+        : VideoViewType.textureView;
+    final VideoPlayerController controller;
+    if (media.localPath != null) {
+      // 离线合并 MP4：直接以本地文件播放（与导出后系统 QuickLook 完全同路），
+      // 规避 AVFoundation 对「回环 HTTP 渐进播放」的真机兼容问题。
+      controller = VideoPlayerController.file(
+        File(media.localPath!),
+        viewType: viewType,
+        videoPlayerOptions: VideoPlayerOptions(allowBackgroundPlayback: true),
+      );
+    } else if (media.isNetwork) {
+      controller = VideoPlayerController.networkUrl(
+        uri,
+        httpHeaders: media.headers ?? const <String, String>{},
+        viewType: viewType,
+        // 后台音频继续播放：切到后台时画面停、声音不停（用户在听内容）。
+        // `allowBackgroundPlayback` 是插件暴露的唯一后台开关，它顺带把
+        // 音画会话设成播放类，与另一条原生通道（锁屏控制）配合工作。
+        videoPlayerOptions: VideoPlayerOptions(allowBackgroundPlayback: true),
+      );
+    } else {
+      controller = VideoPlayerController.file(
+        File.fromUri(media.uri),
+        viewType: viewType,
+        videoPlayerOptions: VideoPlayerOptions(allowBackgroundPlayback: true),
+      );
+    }
     _controller = controller;
     _networkMedia = media.isNetwork;
     _downloadClock

@@ -8,7 +8,12 @@ import 'player_stats.dart';
 
 /// 播放器要打开的媒体。
 class PlayerMedia {
-  const PlayerMedia({required this.uri, this.headers, this.title});
+  const PlayerMedia({
+    required this.uri,
+    this.headers,
+    this.title,
+    this.localPath,
+  });
 
   /// 本地文件与网络地址统一用 URI 表达。
   final Uri uri;
@@ -17,7 +22,19 @@ class PlayerMedia {
 
   final String? title;
 
-  bool get isNetwork => uri.scheme == 'http' || uri.scheme == 'https';
+  /// 沙盒内真实的本地文件路径（离线下载合并后的 `merged.mp4`）。
+  ///
+  /// 命中时，AVPlayer 内核直接以本地文件播放（`VideoPlayerController.file`），
+  /// 不再走回环 HTTP 服务器。原因：该 MP4 经导出后可由系统 QuickLook（同为
+  /// AVFoundation）正常播放，且 moov 已前置（`+faststart`），文件本身没问题；
+  /// 但 AVFoundation 对「回环 HTTP 渐进播放」挑剔，自建 Dart 静态服务器在
+  /// 真机上偶发放不动。用本地文件则与导出播放完全同路，最稳。
+  /// 其余内核（MPV / MDK）仍使用 [uri] 的回环 HTTP 通道（其对 file:// 含空格
+  /// 路径支持不一）。HLS 播放列表（`.m3u8`）不应填此值（需分段拉流）。
+  final String? localPath;
+
+  bool get isNetwork =>
+      localPath == null && (uri.scheme == 'http' || uri.scheme == 'https');
 }
 
 /// 播放器对外暴露的只读状态快照。
