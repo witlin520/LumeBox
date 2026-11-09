@@ -2,6 +2,7 @@ import Flutter
 import UIKit
 import Security
 import AVFoundation
+import ffmpeg_kit_flutter_new
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -46,6 +47,12 @@ import AVFoundation
     }
     if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "LumeBoxPython") {
       LumePythonController.register(with: registrar)
+    }
+    // ffmpeg_kit_flutter_new 是 ObjC 插件，Flutter 3.47.5 的 SPM 自动注册未将它纳入
+    // GeneratedPluginRegistrant，导致运行时 MissingPluginException(flutter.arthenica.com/ffmpeg_kit)。
+    // 这里按项目既有插件注册模式手动注册，否则离线 MP4 合并无法调用内嵌 FFmpeg。
+    if let registrar = engineBridge.pluginRegistry.registrar(forPlugin: "ffmpeg_kit_flutter_new") {
+      FFmpegKitFlutterPlugin.register(with: registrar)
     }
     if let messenger = engineBridge.pluginRegistry.registrar(forPlugin: "LumeBoxConfiguration")?.messenger() {
       configurationExport.register(with: messenger)
