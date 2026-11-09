@@ -624,7 +624,19 @@ class MdkEngine extends AbstractPlayer
           valueListenable: _player.textureId,
           builder: (context, id, _) {
             if (id == null) return const SizedBox.expand();
-            return Texture(textureId: id);
+            final tex = Texture(textureId: id);
+            // fvp 的 updateTexture 默认 fit 校正，纹理本身是「视频帧比例」；
+            // 但无约束的 `Texture` 会铺满播放器区域，视图宽高比 ≠ 视频宽高比时
+            // 画面会被拉伸/放大（用户反馈「MDK 有时画面放大」）。用视频实际
+            // 宽高比约束显示，恢复标准 letterbox。
+            final videos = _player.mediaInfo.video;
+            if (videos == null || videos.isEmpty) return tex;
+            final codec = videos.first.codec;
+            if (codec.width <= 0 || codec.height <= 0) return tex;
+            return AspectRatio(
+              aspectRatio: codec.width / codec.height,
+              child: tex,
+            );
           },
         );
       },
