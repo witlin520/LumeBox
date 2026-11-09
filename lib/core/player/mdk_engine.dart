@@ -361,6 +361,7 @@ class MdkEngine extends AbstractPlayer
     _player.media = uri.toString();
     // fvp 要求显式 prepare 才会真正起播（内部会等首个媒体信息到达）。
     await _player.prepare();
+    _applyAspectRatio();
     _duration = Duration(milliseconds: _player.mediaInfo.duration);
     _emit(duration: _duration, position: Duration.zero);
     _applySubtitleState();
@@ -430,6 +431,30 @@ class MdkEngine extends AbstractPlayer
     'avio.reconnect_on_http_error': '429,500,502,503,504',
     'avio.seg_max_retry': '3',
   };
+
+  /// 强制 libmdk 在渲染层保持视频宽高比（黑边 letterbox），不让画面铺满拉伸。
+  ///
+  /// ## 为什么必须在这一层修「画面放大」
+  ///
+  /// MDK 的渲染面（`setVideoSurfaceSize`）尺寸与视频帧比例**未必一致**：
+  /// 首次建纹理走 `updateTexture`（fvp 内部按视频比例校正），但页面重建时
+  /// `_ensureTexture` 会改走 `setVideoSurfaceSize(视口宽, 视口高)`，把渲染面换成
+  /// **视口比例**。libmdk 默认铺满渲染面 → 视频被拉伸/放大（用户反馈的
+  /// 「MDK 画面放大」）。Flutter 侧用 `AspectRatio` 包 `Texture` 只约束了「贴图
+  /// 的盒子」，管不住渲染面内部的拉伸，所以上次修了没生效。
+  ///
+  /// `setAspectRatio` 是 libmdk 自己的属性：`keepAspectRatio` 让视频按原比例
+  /// 在渲染面内取最大可放置尺寸（不足处补黑边），与渲染面尺寸解耦，从而根治放大。
+  ///
+  /// 文档：https://github.com/wang-bin/mdk-sdk/wiki/Player-APIs#void-setaspectratiofloat-value-void-vo_opaque--nullptr
+  void _applyAspectRatio() {
+    if (!_live) return;
+    try {
+      _player.setAspectRatio(mdk.keepAspectRatio);
+    } catch (error) {
+      LumeLog.warn('[mdk] 设置渲染宽高比失败：$error');
+    }
+  }
 
   void _startTicker() {
     _ticker?.cancel();
@@ -624,19 +649,12 @@ class MdkEngine extends AbstractPlayer
           valueListenable: _player.textureId,
           builder: (context, id, _) {
             if (id == null) return const SizedBox.expand();
-            final tex = Texture(textureId: id);
-            // fvp 的 updateTexture 默认 fit 校正，纹理本身是「视频帧比例」；
-            // 但无约束的 `Texture` 会铺满播放器区域，视图宽高比 ≠ 视频宽高比时
-            // 画面会被拉伸/放大（用户反馈「MDK 有时画面放大」）。用视频实际
-            // 宽高比约束显示，恢复标准 letterbox。
-            final videos = _player.mediaInfo.video;
-            if (videos == null || videos.isEmpty) return tex;
-            final codec = videos.first.codec;
-            if (codec.width <= 0 || codec.height <= 0) return tex;
-            return AspectRatio(
-              aspectRatio: codec.width / codec.height,
-              child: tex,
-            );
+            // 画面宽高比由「渲染层」保证（load/_ensureTexture 里调
+            // setAspectRatio(keepAspectRatio)）；页面层的 _buildPicture 也按视频
+            // 宽高比算好了取景框。这里就按 fvp 官方做法返回裸 Texture——
+            // 再包一层 AspectRatio 会和页面层的 contain/cover 取景冲突，
+            // 反而把视频框错。
+            return Texture(textureId: id);
           },
         );
       },
@@ -650,9 +668,12 @@ class MdkEngine extends AbstractPlayer
       if (_textureId == null) {
         final id = await _player.updateTexture(width: width, height: height);
         if (id >= 0) _textureId = id;
+        _applyAspectRatio();
         return;
       }
       _player.setVideoSurfaceSize(width, height);
+      // 渲染面尺寸一变，libmdk 可能重新铺满 → 每次同步完尺寸都重设宽高比。
+      _applyAspectRatio();
     } catch (error, stackTrace) {
       LumeLog.error(error, stackTrace);
       LumeLog.warn('[mdk] 创建/更新渲染纹理失败：$error');

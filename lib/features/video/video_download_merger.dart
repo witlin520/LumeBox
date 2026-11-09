@@ -36,6 +36,8 @@ class VideoDownloadMerger {
       'ALL',
       '-extension_picky',
       '0',
+      '-fflags',
+      '+genpts',
       '-i',
       p.join(directory.path, 'index.m3u8'),
       '-map',
@@ -84,6 +86,12 @@ class VideoDownloadMerger {
       'file,crypto,data',
       '-allowed_extensions',
       'ALL',
+      // 输入侧强制重建 PTS：HLS 的 TS 分片间时间戳常有累积误差/跳变，
+      // `-c copy` 把这些「带病」时间戳原样写进 MP4，AVFoundation 的严格解析器
+      // 会因此拒绝起播（-12178 / CSSStatusErrorDomain），而 QuickLook 较宽松能播。
+      // 重建 PTS 是官方推荐的修复，不重编码、不降画质。
+      '-fflags',
+      '+genpts',
       '-i',
       p.join(directory.path, 'index.m3u8'),
       '-map',
