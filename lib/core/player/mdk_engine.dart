@@ -649,34 +649,49 @@ class MdkEngine extends AbstractPlayer
           valueListenable: _player.textureId,
           builder: (context, id, _) {
             if (id == null) return const SizedBox.expand();
-            // 画面宽高比由「渲染层」保证（load/_ensureTexture 里调
-            // setAspectRatio(keepAspectRatio)）；页面层的 _buildPicture 也按视频
-            // 宽高比算好了取景框。这里就按 fvp 官方做法返回裸 Texture——
-            // 再包一层 AspectRatio 会和页面层的 contain/cover 取景冲突，
-            // 反而把视频框错。
-            return Texture(textureId: id);
+            final tex = Texture(textureId: id);
+            // 页面层 _buildPicture 在拿到视频宽高后，会按视频比例算好取景框再调用
+            // buildView；但「拿到宽高之前」的那一小段时间，buildView 是直接放在
+            // 全屏视口里的，视口比例 ≠ 视频比例。裸 `Texture` 会铺满视口把视频
+            // 拉成视口比例（画面「放大/变形」）。用视频实际宽高比兜底约束，
+            // 让它先居中 letterbox 一帧，等页面层拿到宽高后自然接管。
+            // （与 AVPlayer/MPV 的 buildView 同一口径，不会和页面层的 contain/cover
+            // 取景冲突——那两种取景框的宽高比本来就是视频比例。）
+            final videos = _player.mediaInfo.video;
+            if (videos == null || videos.isEmpty) return tex;
+            final codec = videos.first.codec;
+            if (codec.width <= 0 || codec.height <= 0) return tex;
+            return AspectRatio(
+              aspectRatio: codec.width / codec.height,
+              child: tex,
+            );
           },
         );
       },
     );
   }
 
-  /// 建纹理 / 跟随尺寸变化更新渲染面。
+  /// 建纹理（只创建一次，不随尺寸变化重设渲染面）。
+  ///
+  /// ## 为什么只建一次、绝不调 `setVideoSurfaceSize`
+  ///
+  /// fvp 官方 `video_player` 后端只在 `create()` 里调一次
+  /// `updateTexture(width, height)`（其内部 `fit:true` 会把纹理尺寸按视频比例校正），
+  /// 之后**不再改渲染面尺寸**——画面交给 Flutter 侧去缩放。
+  ///
+  /// 之前这里在纹理已存在时改走 `setVideoSurfaceSize(视口宽, 视口高)`，把渲染面从
+  /// 「视频比例」换成「视口比例」，libmdk 默认铺满渲染面 → 视频被拉伸放大（用户
+  /// 反馈的「MDK 画面放大」）。去掉它，纹理始终是视频比例的渲染面，放大即消除。
   Future<void> _ensureTexture(int width, int height) async {
     if (!_live || width <= 0 || height <= 0) return;
+    if (_textureId != null) return;
     try {
-      if (_textureId == null) {
-        final id = await _player.updateTexture(width: width, height: height);
-        if (id >= 0) _textureId = id;
-        _applyAspectRatio();
-        return;
-      }
-      _player.setVideoSurfaceSize(width, height);
-      // 渲染面尺寸一变，libmdk 可能重新铺满 → 每次同步完尺寸都重设宽高比。
+      final id = await _player.updateTexture(width: width, height: height);
+      if (id >= 0) _textureId = id;
       _applyAspectRatio();
     } catch (error, stackTrace) {
       LumeLog.error(error, stackTrace);
-      LumeLog.warn('[mdk] 创建/更新渲染纹理失败：$error');
+      LumeLog.warn('[mdk] 创建渲染纹理失败：$error');
     }
   }
 
